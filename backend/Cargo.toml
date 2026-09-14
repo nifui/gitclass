@@ -1,0 +1,25 @@
+[package]
+name = "backend"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+axum = { version = "0.8.9", features = ["macros"] }
+dotenvy = "0.15.7"
+jsonwebtoken = "11.0.0"
+rand_core = "0.10.1"
+serde = "1.0.229"
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+sqlx = {version = "0.9.0", features = ["uuid", "runtime-tokio", "postgres", "json", "tls-rustls-aws-lc-rs"]}
+thiserror = "2.0.20"
+time = "0.3.55"
+tokio = {version = "1.53.1", features = ["full"]}
+tower = "0.5.3"
+tower-http = "0.7.1"
+tracing = "0.1.44"
+utoipa = "5.5.0"
+utoipa-axum = "0.2.0"
+utoipa-swagger-ui = "9.0.2"
+uuid = {version = "1.26.1", features = ["v4", "v7", "serde"]}

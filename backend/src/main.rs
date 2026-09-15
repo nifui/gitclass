@@ -23,10 +23,14 @@ async fn main() {
     dotenv().ok();
     let host_address = std::env::var("SERVE_ADDRESS").unwrap();
     let db_url = std::env::var("DATABASE_URL").unwrap();
+    let pool = PgPool::connect(&db_url).await.unwrap();
+
     let state = Arc::new(AppState {
-        pool: PgPool::connect(&db_url).await.unwrap(),
+        pool,
         jwt_secret: jwt_secret(),
     });
+    //For development testing.
+    // sqlx::migrate!("./migrations").run(&pool).await?;
     let listener = tokio::net::TcpListener::bind(host_address.clone())
         .await
         .unwrap();

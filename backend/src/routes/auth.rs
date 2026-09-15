@@ -1,10 +1,14 @@
+use crate::errors::AuthError;
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use time::Duration;
+
+use base64::{Engine as _, engine::general_purpose};
+use rand::{TryRng, rngs::SysRng};
+use sha2::{Digest, Sha256};
+use sqlx::{Executor, Postgres};
+use time::OffsetDateTime;
 use uuid::Uuid;
-
-use crate::errors::AuthError;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: uuid::Uuid,
@@ -32,12 +36,15 @@ pub fn generate_access_token(user_id: Uuid, secret: &'static [u8]) -> Result<Str
     )?)
 }
 
-pub fn generate_refresh_token() -> String {
+pub fn generate_refresh_token() -> Result<String, AuthError> {
     let mut bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut bytes);
-    general_purpose::URL_SAFE_NO_PAD.encode(bytes)
-}
 
+    SysRng
+        .try_fill_bytes(&mut bytes)
+        .map_err(AuthError::Random)?;
+
+    Ok(general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
 pub fn hash_refresh_token(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }

@@ -180,6 +180,9 @@ pub enum AuthError {
 
     #[error("jwt error: {0}")]
     Jwt(#[from] jsonwebtoken::errors::Error),
+
+    #[error("randomness generator error: {0}")]
+    Random(#[from] rand::rngs::SysError),
 }
 
 use std::borrow::Cow;
@@ -216,6 +219,10 @@ impl IntoResponse for AuthError {
                 Cow::Owned(err.to_string()),
             ),
             Self::Jwt(err) => (StatusCode::UNAUTHORIZED, Cow::Owned(err.to_string())),
+            Self::Random(_err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Cow::Borrowed("Source of randomness failed"),
+            ),
         };
 
         (status, msg).into_response()

@@ -1,3 +1,14 @@
+CREATE TABLE IF NOT EXISTS workflow_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workflow_run_id UUID NOT NULL REFERENCES workflow_run(id) ON DELETE CASCADE,
+    stream log_stream NOT NULL,
+    storage_path TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_log_run
+    ON workflow_log(workflow_run_id);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES app_user(id) ON DELETE SET NULL,

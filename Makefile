@@ -22,3 +22,5 @@ test:
 
 clean:
 	docker compose down -v
+
+drop: 

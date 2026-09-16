@@ -1,12 +1,9 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
 use axum::Router;
 use backend::AppState;
 use dotenvy::dotenv;
-use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 
 //This could be changed to a static array as JWT_SECRET tokens should be of constant size.
 static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
@@ -18,17 +15,19 @@ pub fn jwt_secret() -> &'static [u8] {
             .into_bytes()
     })
 }
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
     let host_address = std::env::var("SERVE_ADDRESS").unwrap();
-    let db_url = std::env::var("DATABASE_URL").unwrap();
-    let pool = PgPool::connect(&db_url).await.unwrap();
+    let database_url = std::env::var("DATABASE_URL").unwrap();
 
-    let state = Arc::new(AppState {
-        pool,
-        jwt_secret: jwt_secret(),
-    });
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .unwrap();
+    let state = Arc::new(AppState { pool });
     //For development testing.
     // sqlx::migrate!("./migrations").run(&pool).await?;
     let listener = tokio::net::TcpListener::bind(host_address.clone())

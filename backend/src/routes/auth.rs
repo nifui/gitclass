@@ -58,19 +58,5 @@ where
 {
     let token_hash = hash_refresh_token(token);
     let expires_at = OffsetDateTime::now_utc() + time::Duration::days(7);
-
-    sqlx::query!(
-        r#"
-        INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-        VALUES ($1, $2, $3)
-        "#,
-        user_id,
-        token_hash,
-        expires_at
-    )
-    .execute(executor)
-    .await
-    .map_err(AuthError::Database)?;
-
     Ok(())
 }

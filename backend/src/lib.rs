@@ -4,7 +4,6 @@ use sqlx::PgPool;
 
 pub struct AppState {
     pub pool: PgPool,
-    pub jwt_secret: &'static [u8],
 }
 
 //Idea for allowing swapping Git Providers if in the future a self-hosted git storage is desired.

@@ -3,7 +3,7 @@ setup:
 	docker compose up -d postgres
 
 dev:
-	cargo run
+	cargo run --release
 
 up:
 	docker compose up --build

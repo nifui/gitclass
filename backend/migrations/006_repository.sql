@@ -1,8 +1,8 @@
 
 CREATE TABLE IF NOT EXISTS repository (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    github_repo_id BIGINT NOT NULL UNIQUE,
-    organization_id UUID REFERENCES github_organization(id) ON DELETE SET NULL,
+    git_repo_id BIGINT NOT NULL UNIQUE,
+    organization_id UUID REFERENCES git_organization(id) ON DELETE SET NULL,
     owner TEXT NOT NULL,
     name TEXT NOT NULL,
     full_name TEXT NOT NULL UNIQUE,

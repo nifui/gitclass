@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS app_user (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    github_user_id BIGINT UNIQUE,
+    git_user_id BIGINT UNIQUE,
     username TEXT NOT NULL,
     display_name TEXT,
     email TEXT,

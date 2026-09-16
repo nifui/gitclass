@@ -62,3 +62,7 @@ If a seperate classroom is needed spin up another database or something.
 
 -- Optional 
 Build on top of self github 
+
+
+For executing jobs like removing stale data, turnining in assignments, a task queue should be employed. 
+Cron jobs work for single one off things but they lack proper synchronization.

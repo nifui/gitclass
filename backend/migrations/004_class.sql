@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS class (
     name TEXT NOT NULL,
     course_code TEXT,
     term TEXT,
-    organization_id UUID REFERENCES github_organization(id) ON DELETE SET NULL,
+    organization_id UUID REFERENCES git_organization(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     archived_at TIMESTAMPTZ

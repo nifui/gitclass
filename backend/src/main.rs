@@ -1,17 +1,15 @@
-use aide::{
-    axum::ApiRouter,
-    openapi::{OpenApi, Tag},
-    transform::TransformOpenApi,
-};
+use aide::{axum::ApiRouter, openapi::OpenApi, transform::TransformOpenApi};
 use axum::Extension;
 use backend::{AppState, routes::docs::docs_routes};
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::{Arc, OnceLock};
 use tokio::net::TcpListener;
+
 //This could be changed to a static array as JWT_SECRET tokens should be of constant size.
 static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
 
+#[inline(always)]
 pub fn jwt_secret() -> &'static [u8] {
     JWT_SECRET.get_or_init(|| {
         std::env::var("JWT_SECRET")
@@ -31,6 +29,7 @@ async fn main() {
         println!("{error}");
     });
     aide::generate::extract_schemas(true);
+
     let mut api = OpenApi::default();
 
     let pool = PgPoolOptions::new()
@@ -44,33 +43,24 @@ async fn main() {
         pool,
         jwt_secret: jwt_secret(),
     });
+
     let app = ApiRouter::new()
         .nest_api_service("/docs", docs_routes(state.clone()))
         .finish_api_with(&mut api, api_docs)
         .layer(Extension(Arc::new(api)))
         .with_state(state);
+
     let listener = TcpListener::bind(&serve_address).await.unwrap();
+
     println!("Backend being served at {:?}", serve_address);
+
     axum::serve(listener, app).await.unwrap();
 }
+
 fn api_docs(api: TransformOpenApi) -> TransformOpenApi {
     api.title("Git Classroom")
         .summary(
             "Replacement for Github classroom for managing student grades across code repositories.",
         )
         .description(include_str!("../../README.md"))
-        .tag(Tag {
-            name: "Test".into(),
-            description: Some("Test".into()),
-            ..Default::default()
-        })
-        .security_scheme(
-            "ApiKey",
-            aide::openapi::SecurityScheme::ApiKey {
-                location: aide::openapi::ApiKeyLocation::Header,
-                name: "X-Auth-Key".into(),
-                description: Some("A key that is ignored.".into()),
-                extensions: Default::default(),
-            },
-        )
 }

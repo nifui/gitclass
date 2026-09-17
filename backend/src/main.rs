@@ -37,7 +37,6 @@ async fn main() {
         .connect(&database_url)
         .await
         .unwrap();
-    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
 
     let state = Arc::new(AppState {
         pool,

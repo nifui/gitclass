@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{AppState, errors::AuthError};
-use aide::axum::ApiRouter;
+use aide::axum::{ApiRouter, routing::post};
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::phc::SaltString,
 };
@@ -10,7 +10,6 @@ use axum::{
     extract::{FromRequestParts, State},
     http::{StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
-    routing::get,
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use schemars::JsonSchema;
@@ -101,6 +100,8 @@ pub fn generate_access_token(user_id: Uuid, secret: &'static [u8]) -> Result<Str
         &EncodingKey::from_secret(secret),
     )?)
 }
+
+#[axum::debug_handler]
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RefreshRequest>,
@@ -237,14 +238,4 @@ impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
 
         Ok(Self(claims))
     }
-}
-pub fn auth_routes(state: Arc<AppState>) -> ApiRouter {
-    aide::generate::infer_responses(true);
-
-    let router: ApiRouter = ApiRouter::new()
-        .route("/auth/refresh", get(refresh))
-        .with_state(state);
-
-    aide::generate::infer_responses(false);
-    router
 }

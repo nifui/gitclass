@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-aide = {version = "0.15.1", features = ["axum", "swagger"]}
+aide = {version = "0.15.1", features = ["axum", "redoc"]}
 anyhow = "1.0.104"
 argon2 = {version = "0.6.0", features = ["rand_core"]}
 axum = { version = "0.8.9", features = ["macros"] }

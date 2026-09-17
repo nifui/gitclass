@@ -26,20 +26,24 @@ async fn main() {
     dotenv().ok();
     let serve_address = std::env::var("SERVE_ADDRESS").expect("SERVE_ADDRESS must be set.");
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set.");
-    let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set.");
+
     aide::generate::on_error(|error| {
         println!("{error}");
     });
     aide::generate::extract_schemas(true);
-
     let mut api = OpenApi::default();
+
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
         .await
         .unwrap();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-    let state = Arc::new(AppState { pool, jwt_secret });
+
+    let state = Arc::new(AppState {
+        pool,
+        jwt_secret: jwt_secret(),
+    });
     let app = ApiRouter::new()
         .nest_api_service("/docs", docs_routes(state.clone()))
         .finish_api_with(&mut api, api_docs)

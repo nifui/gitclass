@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use aide::swagger::Swagger;
+use aide::redoc::Redoc;
 use aide::{
     axum::{
         ApiRouter, IntoApiResponse,
@@ -25,7 +25,7 @@ pub fn docs_routes(state: Arc<AppState>) -> ApiRouter {
         .api_route_with(
             "/swagger",
             get_with(
-                Swagger::new("/docs/private/api.json")
+                Redoc::new("/docs/private/api.json")
                     .with_title("Aide Axum")
                     .axum_handler(),
                 |op| op.description("This documentation page."),

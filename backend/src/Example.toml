@@ -1,0 +1,56 @@
+[workflow]
+name = "Python Assignment 1"
+version = 1
+
+[runtime]
+language = "python"
+version = "3.12"
+
+[dependencies]
+file = "requirements.lock"
+sha256 = "8c7c4d..."
+
+[network]
+enabled = false
+
+[filesystem]
+mode = "workspace"
+read_only = [
+    "/usr",
+    "/lib",
+    "/bin"
+]
+
+[limits]
+timeout_seconds = 60
+cpu_seconds = 30
+memory_mb = 512
+disk_mb = 1024
+processes = 32
+output_mb = 10
+
+[environment]
+variables = {
+    PYTHONUNBUFFERED = "1"
+}
+
+[artifacts]
+include = [
+    "pytest-report.xml",
+    "coverage.xml"
+]
+
+[cleanup]
+workspace = true
+processes = true
+
+[[steps]]
+name = "install"
+type = "install_dependencies"
+
+[[steps]]
+name = "test"
+type = "command"
+command = ["pytest", "tests/", "-v"]
+timeout_seconds = 30
+requires = ["install"]

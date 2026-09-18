@@ -1,7 +1,33 @@
-//For the general structure we should define a parser.
+//Deserialize into struct, validate the workflow, produce ValidatedWorkflow, execute workflow,
 
 use std::marker::PhantomData;
 
+struct SchedulingPreferences {
+    prefer_cached_dependencies: bool,
+    prefer_warm_runtime: bool,
+    prefer_idle_runner: bool,
+    max_queue_time: Duration,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum Step {
+    InstallDependencies {
+        name: String,
+    },
+
+    Command {
+        name: String,
+        command: Vec<String>,
+        #[serde(default)]
+        timeout_seconds: Option<u64>,
+    },
+
+    Artifact {
+        name: String,
+        include: Vec<String>,
+    },
+}
 #[derive(Debug, Default, Clone)]
 pub struct ExecutableTask {
     pub dependencies: Vec<String>,

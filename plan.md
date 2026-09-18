@@ -58,3 +58,18 @@ does the program run and last, does it exceed a certain limit,
 These might be out of the depth of the project, but some form of ML could be
 implemented to handle some parts of the subjective grading aspect especially for
 web apps.
+
+## Thoughts
+Should we allow individual steps to be defined in their own file? 
+I think no due to the fact that some steps inherently rely on certain limits being established for safe execution.
+Logs are most likely going to be the most important part of this whole thing as it allows errors to be visually seen. 
+Log levels - (CRITICAL, WARNING, DEBUG, INFO)
+Might fuse certain levels or add more dependeing on overall usage. 
+Timestampled and with callbacks detailing where. 
+Should be configurable via conditional compilation
+If conditional compilation is a bad thing, we can just runtime switch statements.
+
+I think we should seperate steps from the actual container configuration, 
+Containers can be reused but steps are more versatile. 
+We can force steps to have explicit requirements.
+Only issue with that is we 

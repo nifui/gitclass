@@ -15,12 +15,12 @@ jsonwebtoken = "11.0.0"
 rand = "0.10.2"
 rand_core = "0.10.1"
 schemars = "1.2.2"
-serde = "1.0.229"
+serde = {version = "1.0.229", features = ["derive"]}
 serde_json = "1.0.151"
 sha2 = "0.11.0"
 sqlx = {version = "0.9.0", features = ["time", "uuid", "runtime-tokio", "postgres", "json", "tls-rustls-aws-lc-rs"]}
 thiserror = "2.0.20"
-time = "0.3.55"
+time = {version = "0.3.55", features = ["serde"]}
 tokio = {version = "1.53.1", features = ["full"]}
 toml = "1.1.6"
 tower = "0.5.3"

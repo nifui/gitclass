@@ -1,20 +1,35 @@
-[workflow]
+# Add something for persistence of software being run. Allows caching and reuse across multiple pipelines.
+# Again this is all dependent on the scheduler so a lot of these options can't be really specified here. 
+[metadata]
 name = "Python Assignment 1"
 version = 1
+date = 1979-05-27T07:32:00Z
 
+# Might remove this as it doesn't make sense to me.
 [runtime]
+# Language being executed
 language = "python"
+# Version of runtime 
 version = "3.12"
 
 [dependencies]
+# Path to package list. 
 file = "requirements.lock"
+# Package hash
 sha256 = "8c7c4d..."
 
 [network]
+# Can the network be used? 
 enabled = false
+# Allowed protocols 
+protoccol = ["tdp"]
+# Allowed ports
+ports = ["8080"]
 
 [filesystem]
+# ? 
 mode = "workspace"
+# Directories that should be read only. 
 read_only = [
     "/usr",
     "/lib",
@@ -22,25 +37,41 @@ read_only = [
 ]
 
 [limits]
+# ? 
 timeout_seconds = 60
+# How much CPU time. 
 cpu_seconds = 30
+# Max amount of ram usable. 
 memory_mb = 512
+# Max amount of disk space usable. 
 disk_mb = 1024
+# Max amount of processes that can be spawned and used
 processes = 32
+# How much of the output should be allowed out per second?
 output_mb = 10
 
 [environment]
+# Environment variables 
 variables = {
     PYTHONUNBUFFERED = "1"
 }
-
+# Secrets provided by the admin, usually an external reference.
+# Can use a local path to provide the secrets. 
+secret = {
+   secrets = "A"
+}
+#What should be returned after it has ran? 
 [artifacts]
+#Files to be rerturned 
 include = [
     "pytest-report.xml",
     "coverage.xml"
 ]
+#Statistics about the workflow returned 
+stats = { runtime = "",  mem_usage = ""}
 
 [cleanup]
+
 workspace = true
 processes = true
 
@@ -49,8 +80,22 @@ name = "install"
 type = "install_dependencies"
 
 [[steps]]
+# Name of the step to be referenced. 
 name = "test"
+# Type of step being executed. 
 type = "command"
+# Actual command being executed. 
 command = ["pytest", "tests/", "-v"]
+# How long to wait? 
 timeout_seconds = 30
+# Locally defined stepss that are required
 requires = ["install"]
+# Step/task that is not defined here. We can reference it by either it's name or a specific step.
+# Prefix - w defines a workflow dependency, s defines a step dependecy. 
+# A workflow dependecy basically uses a full container, but a step dependecy 
+# will be pulled into the currently defined container's environment and steps.
+# This allows defining reusable steps seperate from files.
+external_requires = ["w:lint", "w:s:install"]
+# Environment required (secrets + env vars) 
+environment = ["API_KEY", "secret"]
+

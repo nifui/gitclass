@@ -71,5 +71,5 @@ If conditional compilation is a bad thing, we can just runtime switch statements
 
 I think we should seperate steps from the actual container configuration, 
 Containers can be reused but steps are more versatile. 
-We can force steps to have explicit requirements.
-Only issue with that is we 
+Instead of implicit defaults or explicit user defined configuration options, we 
+can expose an option that allows the configuration to be left to the schelduler.

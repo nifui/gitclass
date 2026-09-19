@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::{AppState, errors::AuthError};
-use aide::axum::{ApiRouter, routing::post};
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::phc::SaltString,
 };

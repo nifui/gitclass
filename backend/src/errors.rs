@@ -3,10 +3,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use schemars::JsonSchema;
 use serde::Serialize;
 use thiserror::Error;
-#[derive(Debug, Serialize, JsonSchema)]
+use utoipa::ToSchema;
+#[derive(Debug, Serialize, ToSchema)]
 struct ErrorResponse {
     code: &'static str,
     message: String,

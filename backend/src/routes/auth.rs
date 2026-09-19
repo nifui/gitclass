@@ -11,7 +11,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use time::Duration;
 
@@ -20,6 +19,8 @@ use rand::{TryRng, rngs::SysRng};
 use sha2::{Digest, Sha256};
 use sqlx::{Executor, Postgres};
 use time::OffsetDateTime;
+use utoipa::ToSchema;
+use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,30 +32,30 @@ pub struct Claims {
     pub aud: String,
     pub jti: uuid::Uuid,
 }
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RefreshRequest {
     pub refresh_token: String,
 }
 
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct SignupRequest {
     pub email: String,
     pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LoginRequest {
     pub identifier: String,
     pub password: String,
 }
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
     pub access_token: String,
     pub refresh_token: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AuthResponse {
     pub access_token: String,
     pub refresh_token: String,
@@ -100,46 +101,6 @@ pub fn generate_access_token(user_id: Uuid, secret: &'static [u8]) -> Result<Str
     )?)
 }
 
-#[axum::debug_handler]
-pub async fn refresh(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<RefreshRequest>,
-) -> Result<AuthResponse, AuthError> {
-    let token_hash = hash_refresh_token(&req.refresh_token);
-    let mut tx = state.pool.begin().await.map_err(AuthError::Database)?;
-
-    let record = sqlx::query!(
-        r#"
-        SELECT id, user_id, expires_at
-        FROM refresh_token
-        WHERE token_hash = $1
-        "#,
-        token_hash
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(AuthError::Database)?
-    .ok_or(AuthError::InvalidCredentials)?;
-
-    if record.expires_at < OffsetDateTime::now_utc() {
-        return Err(AuthError::TokenExpired);
-    }
-
-    sqlx::query!("DELETE FROM refresh_token WHERE id = $1", record.id)
-        .execute(&mut *tx)
-        .await
-        .map_err(AuthError::Database)?;
-
-    let new_refresh = generate_refresh_token()?;
-    store_refresh_token(&mut *tx, record.user_id, &new_refresh).await?;
-    tx.commit().await.map_err(AuthError::Database)?;
-
-    let access_token = generate_access_token(record.user_id, state.jwt_secret)?;
-    Ok(AuthResponse {
-        access_token,
-        refresh_token: new_refresh,
-    })
-}
 pub fn generate_refresh_token() -> Result<String, AuthError> {
     let mut bytes = [0u8; 32];
     SysRng
@@ -237,4 +198,59 @@ impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
 
         Ok(Self(claims))
     }
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    tag = "auth",
+    request_body(content = RefreshRequest),
+    responses(
+        (status = 200, description = "New tokens", body = AuthResponse),
+        (status = 401, description = "Invalid or expired refresh token"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn refresh(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RefreshRequest>,
+) -> Result<AuthResponse, AuthError> {
+    let token_hash = hash_refresh_token(&req.refresh_token);
+    let mut tx = state.pool.begin().await.map_err(AuthError::Database)?;
+
+    let record = sqlx::query!(
+        r#"
+        SELECT id, user_id, expires_at
+        FROM refresh_token
+        WHERE token_hash = $1
+        "#,
+        token_hash
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(AuthError::Database)?
+    .ok_or(AuthError::InvalidCredentials)?;
+
+    if record.expires_at < OffsetDateTime::now_utc() {
+        return Err(AuthError::TokenExpired);
+    }
+
+    sqlx::query!("DELETE FROM refresh_token WHERE id = $1", record.id)
+        .execute(&mut *tx)
+        .await
+        .map_err(AuthError::Database)?;
+
+    let new_refresh = generate_refresh_token()?;
+    store_refresh_token(&mut *tx, record.user_id, &new_refresh).await?;
+    tx.commit().await.map_err(AuthError::Database)?;
+
+    let access_token = generate_access_token(record.user_id, state.jwt_secret)?;
+    Ok(AuthResponse {
+        access_token,
+        refresh_token: new_refresh,
+    })
+}
+
+pub fn router() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new().routes(routes!(refresh))
 }

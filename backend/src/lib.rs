@@ -19,4 +19,3 @@ pub trait GitProvider {
 }
 
 //Import froma specific file format to make it less of a hassle.
-fn import_from_csv(path: &str) {}

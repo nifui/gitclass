@@ -1,11 +1,13 @@
-use axum::{Router, routing::get};
 use backend::{AppState, routes::auth};
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::{Arc, OnceLock};
 use tokio::net::TcpListener;
-use utoipa::OpenApi;
-use utoipa_axum::router::OpenApiRouter;
+use utoipa::{
+    OpenApi,
+    openapi::security::{Http, HttpAuthScheme, SecurityScheme},
+};
+use utoipa_axum::{router::OpenApiRouter, routes};
 use utoipa_redoc::{Redoc, Servable};
 
 static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
@@ -52,9 +54,23 @@ async fn main() {
         jwt_secret: jwt_secret(),
     });
 
-    let (app, api) = router().with_state(state).split_for_parts();
+    let (router, mut openapi) = router()
+        .routes(routes!(health))
+        .with_state(state)
+        .split_for_parts();
 
-    let app = app.merge(Redoc::with_url("/redoc", api));
+    openapi.components.as_mut().unwrap().add_security_scheme(
+        "bearerAuth",
+        SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
+    );
+
+    openapi.info.title = String::from("GitClassroom API");
+    openapi.info.description = Some(String::from("Managing repositories for assignments"));
+    openapi.info.contact = None;
+    openapi.info.version = String::from("1.0.0");
+    openapi.info.license = None;
+
+    let app = router.merge(Redoc::with_url("/redoc", openapi));
 
     let listener = TcpListener::bind(&serve_address)
         .await

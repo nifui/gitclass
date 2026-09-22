@@ -37,7 +37,7 @@ pub struct RefreshRequest {
     pub refresh_token: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct SignupRequest {
     pub email: String,
     pub username: String,
@@ -200,6 +200,18 @@ impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
     }
 }
 
+fn map_sqlx_error(err: sqlx::Error) -> AuthError {
+    if let sqlx::Error::Database(db_err) = &err
+        && db_err.code().as_deref() == Some("23505")
+    {
+        return match db_err.constraint() {
+            Some("users_email_key") => AuthError::DuplicateEmail,
+            Some("users_username_key") => AuthError::DuplicateUsername,
+            _ => AuthError::Database(err),
+        };
+    }
+    AuthError::Database(err)
+}
 #[utoipa::path(
     post,
     path = "/auth/refresh",
@@ -248,6 +260,55 @@ pub async fn refresh(
     Ok(AuthResponse {
         access_token,
         refresh_token: new_refresh,
+    })
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/signup",
+    tag = "auth",
+    request_body(content = SignupRequest),
+    responses(
+        (status = 200, description = "Auth tokens", body = AuthResponse),
+        (status = 400, description = "Invalid input"),
+        (status = 409, description = "Duplicate email or username"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn signup(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SignupRequest>,
+) -> Result<AuthResponse, AuthError> {
+    if req.password.len() < 8 {
+        return Err(AuthError::InvalidInput(
+            "password must be at least 8 characters",
+        ));
+    }
+
+    let email = req.email.to_lowercase();
+    let password_hash = hash_password(&req.password)?;
+
+    let user_id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO app_users (email, username, password_hash)
+        VALUES ($1, $2, $3)
+        RETURNING id
+        "#,
+        email,
+        req.username,
+        password_hash
+    )
+    .fetch_one(&state.pool)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    let access_token = generate_access_token(user_id, state.jwt_secret)?;
+    let refresh_token = generate_refresh_token()?;
+    store_refresh_token(&state.pool, user_id, &refresh_token).await?;
+
+    Ok(AuthResponse {
+        access_token,
+        refresh_token,
     })
 }
 

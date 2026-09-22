@@ -1,3 +1,4 @@
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TYPE system_role AS ENUM (

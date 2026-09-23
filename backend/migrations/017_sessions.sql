@@ -16,4 +16,4 @@ CREATE TABLE sessions (
 );
 
 CREATE INDEX sessions_user_idx
-ON sessions(user_id);
+     ON sessions(user_id);

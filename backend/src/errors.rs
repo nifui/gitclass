@@ -2,6 +2,7 @@ use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
+    routing::trace,
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -63,6 +64,9 @@ pub enum ApiError {
 
     #[error("dumb arbitrary file upload error")]
     ArbitraryFileUpload,
+
+    #[error("Failed to form a proper user IP")]
+    IpNetwork,
 }
 
 impl IntoResponse for ApiError {
@@ -103,6 +107,7 @@ impl IntoResponse for ApiError {
             Self::ArbitraryFileUpload => {
                 (StatusCode::UNSUPPORTED_MEDIA_TYPE, "arbitrary error idk")
             }
+            Self::IpNetwork => (StatusCode::BAD_REQUEST, "improper ip, "),
         };
         tracing::error!(
             status = %status,
@@ -119,7 +124,12 @@ impl IntoResponse for ApiError {
             .into_response()
     }
 }
-
+impl From<ipnetwork::IpNetworkError> for ApiError {
+    fn from(err: ipnetwork::IpNetworkError) -> Self {
+        tracing::error!("network error: {:?}", err);
+        Self::IpNetwork
+    }
+}
 impl From<std::io::Error> for ApiError {
     fn from(err: std::io::Error) -> Self {
         tracing::error!("io error: {:?}", err);
@@ -184,7 +194,6 @@ pub enum AuthError {
     #[error("randomness generator error: {0}")]
     Random(#[from] rand::rngs::SysError),
 }
-
 use std::borrow::Cow;
 
 impl IntoResponse for AuthError {

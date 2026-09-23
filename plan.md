@@ -73,3 +73,13 @@ I think we should seperate steps from the actual container configuration,
 Containers can be reused but steps are more versatile. 
 Instead of implicit defaults or explicit user defined configuration options, we 
 can expose an option that allows the configuration to be left to the schelduler.
+
+Gonna use Redis in case we want this backend to be distributed later on. 
+Moka would work for lightweight implementation thats non distributed.
+Session table might be missing something. 
+
+
+TODO 
+    - Implement proper jti usage. 
+    - Implement sessions table. 
+    - 

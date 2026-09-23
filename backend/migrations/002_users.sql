@@ -8,6 +8,7 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_login_at TIMESTAMPTZ
+    auth_version INTEGER NOT NULL DEFAULT 0;
 );
 
 CREATE UNIQUE INDEX users_username_ci_idx ON users (lower(username));

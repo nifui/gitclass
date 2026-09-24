@@ -170,6 +170,8 @@ impl From<jsonwebtoken::errors::Error> for ApiError {
 }
 #[derive(Error, Debug)]
 pub enum AuthError {
+    #[error("session was revoked ")]
+    SessionRevoked,
     #[error("invalid credentials")]
     InvalidCredentials,
     #[error("token expired")]

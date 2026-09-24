@@ -17,12 +17,12 @@ use jsonwebtoken::{
 };
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, sync::Arc};
-use time::Duration;
+use time::{Duration, UtcDateTime};
 
 use base64::{Engine as _, engine::general_purpose};
 use rand::{TryRng, rngs::SysRng};
 use sha2::{Digest, Sha256};
-use sqlx::{Executor, Postgres, types::ipnetwork::IpNetwork};
+use sqlx::{Executor, PgPool, Postgres, types::ipnetwork::IpNetwork};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -99,22 +99,28 @@ pub struct SignupRequest {
     pub username: String,
     pub password: String,
 }
+
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LoginRequest {
+pub struct SignoutRequest {
+    //Require a refresh token as we want toe examine the session_id and log out of it.
+    pub refresh_token: String,
+    //We look at the jti of this if we do implement jti and put it into Redis if we do use Redis.
+    //The jti will live as long as the ttl of the jwt.
+    pub access_token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SigninRequest {
     pub identifier: String,
     pub password: String,
 }
 #[derive(Debug, Serialize, Deserialize)]
-pub struct LoginResponse {
-    pub access_token: String,
-    pub refresh_token: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AuthResponse {
     pub access_token: String,
     pub refresh_token: String,
 }
+type SigninResponse = AuthResponse;
+
 impl IntoResponse for AuthResponse {
     fn into_response(self) -> axum::response::Response {
         (StatusCode::OK, Json(self)).into_response()
@@ -130,6 +136,7 @@ pub fn hash_password(password: &str) -> Result<String, AuthError> {
 
     Ok(hash)
 }
+
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, AuthError> {
     let parsed_hash = PasswordHash::new(hash).map_err(|_| AuthError::InvalidCredentials)?;
     Ok(Argon2::default()
@@ -156,7 +163,12 @@ pub fn verify_token(token: &str, secret: &'static [u8]) -> Result<Claims, AuthEr
     let token_data = decode::<Claims>(token, &DecodingKey::from_secret(secret), &validation)?;
     Ok(token_data.claims)
 }
-pub fn generate_access_token(user_id: Uuid, secret: &'static [u8]) -> Result<String, AuthError> {
+
+pub fn generate_access_token(
+    user_id: Uuid,
+    session_id: Uuid,
+    secret: &'static [u8],
+) -> Result<String, AuthError> {
     let now = time::OffsetDateTime::now_utc();
     let claims = Claims {
         sub: user_id,
@@ -164,7 +176,7 @@ pub fn generate_access_token(user_id: Uuid, secret: &'static [u8]) -> Result<Str
         iat: now.unix_timestamp(),
         iss: "my-api".to_string(),
         aud: "my-app".to_string(),
-        sid: Uuid::new_v4(),
+        sid: session_id,
     };
 
     Ok(encode(
@@ -173,6 +185,7 @@ pub fn generate_access_token(user_id: Uuid, secret: &'static [u8]) -> Result<Str
         &EncodingKey::from_secret(secret),
     )?)
 }
+
 pub fn hash_refresh_token(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }
@@ -197,6 +210,7 @@ where
 
     Ok(())
 }
+
 pub fn generate_refresh_token() -> Result<String, AuthError> {
     let mut bytes = [0u8; 32];
     SysRng
@@ -205,23 +219,28 @@ pub fn generate_refresh_token() -> Result<String, AuthError> {
     Ok(general_purpose::URL_SAFE_NO_PAD.encode(bytes))
 }
 
-//Is the refresh token valid to be used?
-//Check if the session has been revoked/expired.
-//If yes return an error indicating an expired session.
-//Otherwise rotate the refresh token and return a new access token
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RefreshRequest>,
 ) -> Result<AuthResponse, AuthError> {
     let token_hash = hash_refresh_token(&req.refresh_token);
     let mut tx = state.pool.begin().await.map_err(AuthError::Database)?;
+    //Ensure the session is still valid and has not been revoked.
     let record = sqlx::query!(
         r#"
-        SELECT id, session_id, expires_at
-        FROM refresh_tokens
-        WHERE token_hash = $1
+        SELECT 
+            rt.id, 
+            rt.session_id, 
+            rt.expires_at, 
+            s.user_id,
+            s.revoked_at
+        FROM refresh_tokens rt
+        JOIN sessions s ON rt.session_id = s.id
+        WHERE rt.token_hash = $1
+        AND s.revoked_at != $2
         "#,
-        token_hash
+        token_hash,
+        OffsetDateTime::now_utc()
     )
     .fetch_optional(&mut *tx)
     .await
@@ -230,6 +249,12 @@ pub async fn refresh(
 
     if record.expires_at < OffsetDateTime::now_utc() {
         return Err(AuthError::TokenExpired);
+    }
+
+    if let Some(timestamp) = record.revoked_at
+        && timestamp < OffsetDateTime::now_utc()
+    {
+        return Err(AuthError::SessionRevoked);
     }
 
     sqlx::query!("DELETE FROM refresh_tokens WHERE id = $1", record.id)
@@ -241,12 +266,39 @@ pub async fn refresh(
     store_refresh_token(&mut *tx, &new_refresh).await?;
     tx.commit().await.map_err(AuthError::Database)?;
 
-    let access_token = generate_access_token(record.session_id, state.jwt_secret)?;
+    let access_token = generate_access_token(record.user_id, record.session_id, state.jwt_secret)?;
     Ok(AuthResponse {
         access_token,
         refresh_token: new_refresh,
     })
 }
+pub async fn create_session(
+    executor: &PgPool,
+    user_id: Uuid,
+    meta: &ClientMeta,
+) -> Result<Uuid, AuthError> {
+    let session_id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO sessions 
+            (user_id, 
+             device_name, 
+             ip_address, 
+             user_agent) 
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+        "#,
+        user_id,
+        meta.device_fingerprint,
+        IpNetwork::from_str(&meta.ip_address)?,
+        meta.user_agent
+    )
+    .fetch_one(executor)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(session_id)
+}
+
 //Verify the request is valid(password length/strength, eg)
 //Create a user.
 //Issue a session for the user.
@@ -280,26 +332,10 @@ pub async fn signup(
     .fetch_one(&state.pool)
     .await
     .map_err(map_sqlx_error)?;
-    let session_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO sessions 
-            (user_id, 
-             device_name, 
-             ip_address, 
-             user_agent) 
-        VALUES ($1, $2, $3, $4)
-        RETURNING id
-        "#,
-        user_id,
-        meta.device_fingerprint,
-        IpNetwork::from_str(&meta.ip_address)?,
-        meta.user_agent
-    )
-    .fetch_one(&state.pool)
-    .await
-    .map_err(map_sqlx_error)?;
 
-    let access_token = generate_access_token(user_id, state.jwt_secret)?;
+    //Generate an access token based off of the session id
+    let session_id = create_session(&state.pool, user_id, &meta).await?;
+    let access_token = generate_access_token(user_id, session_id, state.jwt_secret)?;
     let refresh_token = generate_refresh_token()?;
     store_refresh_token(&state.pool, &refresh_token).await?;
 
@@ -308,11 +344,12 @@ pub async fn signup(
         refresh_token,
     })
 }
-//
-pub async fn login(
+
+pub async fn signin(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<LoginRequest>,
-) -> Result<AuthResponse, AuthError> {
+    meta: ClientMeta,
+    Json(req): Json<SigninRequest>,
+) -> Result<SigninResponse, AuthError> {
     const DUMMY_HASH: &str =
         "$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHQ$7vQm0zFjI4G0g8m1QqY6K6v6T6XQ3V8lYQv8h0w5W0A";
 
@@ -333,14 +370,41 @@ pub async fn login(
         None => (None, DUMMY_HASH.to_string()),
     };
 
-    let is_valid = verify_password(&req.password, &password_hash)?;
-    if user_id.is_none() || !is_valid {
+    let is_correct = verify_password(&req.password, &password_hash)?;
+
+    if user_id.is_none() || !is_correct {
         return Err(AuthError::InvalidCredentials);
     }
-
+    //Safely unwrap as we prevented the None case ^.
     let user_id = user_id.unwrap();
-    let access_token = generate_access_token(user_id, state.jwt_secret)?;
+
+    let record = sqlx::query!(
+        r#"
+        SELECT id 
+        FROM sessions
+        WHERE user_id = $1
+            AND device_name = $2
+            AND ip_address = $3 
+            AND user_agent  = $4
+        "#,
+        user_id,
+        meta.device_fingerprint,
+        IpNetwork::from_str(&meta.ip_address)?,
+        meta.user_agent,
+    )
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let session_id = if let Some(record) = record {
+        record.id
+    } else {
+        create_session(&state.pool, user_id, &meta).await?
+    };
+
+    let access_token = generate_access_token(user_id, session_id, state.jwt_secret)?;
+
     let refresh_token = generate_refresh_token()?;
+
     store_refresh_token(&state.pool, &refresh_token).await?;
 
     Ok(AuthResponse {
@@ -348,3 +412,67 @@ pub async fn login(
         refresh_token,
     })
 }
+
+pub async fn signout(State(state): State<Arc<AppState>>, Json(req): Json<SignoutRequest>) {
+    //As long as they have a valid session id that hasn't been revoked, they are free to signout.
+    //We only signout of the session that was provided.
+}
+
+pub async fn revoke_session() {
+    //Revokes a specific session selected by the user.
+    //The user must have a valid session to complete this action.
+}
+
+pub async fn revoke_all_sessions() {
+    //Revokes all sessions currently associated with the user.
+    //The user must have a valid session to complete this action.
+}
+
+//Helpers for paths where the user should be authenicated but does not require explicit
+//permission DB checks. Basically just access token level checks.
+pub fn auth_required(auth_header: &str, secret: &'static [u8]) -> Result<Claims, AuthError> {
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(AuthError::InvalidCredentials)?;
+    verify_token(token, secret)
+}
+
+pub struct AuthUser(pub Claims);
+
+impl FromRequestParts<Arc<AppState>> for AuthUser {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        let auth_header = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or(AuthError::MissingHeader("Authorization"))?;
+
+        Ok(Self(auth_required(auth_header, state.jwt_secret)?))
+    }
+}
+
+pub struct MaybeAuthUser(pub Option<Claims>);
+
+impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> Result<Self, Self::Rejection> {
+        let claims = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|auth_header| auth_required(auth_header, state.jwt_secret).ok());
+
+        Ok(Self(claims))
+    }
+}
+
+pub async fn generate_admin_code() {}

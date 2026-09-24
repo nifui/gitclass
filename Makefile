@@ -1,18 +1,13 @@
-setup:
-	cp .env.example .env
-	docker compose up -d postgres
 
+.PHONY: clean up down db test migrate reset
 dev:
 	cargo run --release
 
 up:
-	docker compose up --build
+	docker compose up -d
 
 down:
 	docker compose down
-
-logs:
-	docker compose logs -f
 
 db:
 	docker compose exec postgres psql -U app -d app
@@ -23,4 +18,7 @@ test:
 clean:
 	docker compose down -v
 
-drop: 
+migrate: 
+	cd backend && sqlx migrate run
+
+reset: clean up migrate

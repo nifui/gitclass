@@ -1,4 +1,4 @@
-use backend::{AppState, routes::auth};
+use backend::AppState;
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::{Arc, OnceLock};
@@ -33,7 +33,7 @@ pub fn jwt_secret() -> &'static [u8] {
 struct ApiDoc;
 
 pub fn router() -> OpenApiRouter<Arc<AppState>> {
-    OpenApiRouter::with_openapi(ApiDoc::openapi()).merge(auth::router())
+    OpenApiRouter::with_openapi(ApiDoc::openapi())
 }
 
 #[tokio::main]

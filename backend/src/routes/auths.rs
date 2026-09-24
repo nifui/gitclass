@@ -66,7 +66,7 @@ where
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
 
-        Ok(ClientMeta {
+        Ok(Self {
             ip_address,
             user_agent,
             device_fingerprint,
@@ -205,19 +205,16 @@ pub fn generate_refresh_token() -> Result<String, AuthError> {
     Ok(general_purpose::URL_SAFE_NO_PAD.encode(bytes))
 }
 
-//Create a session first.
-
+//Is the refresh token valid to be used?
+//Check if the session has been revoked/expired.
+//If yes return an error indicating an expired session.
+//Otherwise rotate the refresh token and return a new access token
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RefreshRequest>,
 ) -> Result<AuthResponse, AuthError> {
     let token_hash = hash_refresh_token(&req.refresh_token);
     let mut tx = state.pool.begin().await.map_err(AuthError::Database)?;
-    let record = sqlx::query!(
-        r#"
-        SELECT 
-        "#
-    );
     let record = sqlx::query!(
         r#"
         SELECT id, session_id, expires_at
@@ -250,11 +247,18 @@ pub async fn refresh(
         refresh_token: new_refresh,
     })
 }
+//Verify the request is valid(password length/strength, eg)
+//Create a user.
+//Issue a session for the user.
+//Once we issued the session we hand out a refresh token.
+//Then we hand out a access token based off of the refresh token.
+//Return an access and refresh token.
+//
 pub async fn signup(
     State(state): State<Arc<AppState>>,
     meta: ClientMeta,
     Json(req): Json<SignupRequest>,
-) -> Result<AuthResponse, ApiError> {
+) -> Result<AuthResponse, AuthError> {
     if req.password.len() < 8 {
         return Err(AuthError::InvalidInput(
             "password must be at least 8 characters",
@@ -278,23 +282,22 @@ pub async fn signup(
     .map_err(map_sqlx_error)?;
     let session_id = sqlx::query_scalar!(
         r#"
-    INSERT INTO sessions 
-        (user_id, 
-         device_name, 
-         ip_address, 
-         user_agent) 
-    VALUES ($1, $2, $3, $4)
-    RETURNING id
-    "#,
+        INSERT INTO sessions 
+            (user_id, 
+             device_name, 
+             ip_address, 
+             user_agent) 
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+        "#,
         user_id,
         meta.device_fingerprint,
         IpNetwork::from_str(&meta.ip_address)?,
         meta.user_agent
-    );
-
-    //Create a user. Then we issue a session for the user.
-    //Once we issued the session we hand out a refresh token.
-    //Then we hand out a access token based off of the refresh token.
+    )
+    .fetch_one(&state.pool)
+    .await
+    .map_err(map_sqlx_error)?;
 
     let access_token = generate_access_token(user_id, state.jwt_secret)?;
     let refresh_token = generate_refresh_token()?;
@@ -305,7 +308,7 @@ pub async fn signup(
         refresh_token,
     })
 }
-
+//
 pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(req): Json<LoginRequest>,

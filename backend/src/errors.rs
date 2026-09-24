@@ -2,21 +2,28 @@ use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::trace,
 };
 use serde::Serialize;
 use thiserror::Error;
 use utoipa::ToSchema;
+
 #[derive(Debug, Serialize, ToSchema)]
-struct ErrorResponse {
-    code: &'static str,
-    message: String,
+pub struct ErrorResponse {
+    pub code: &'static str,
+    pub message: String,
 }
 
 #[derive(Debug, Error)]
 pub enum ApiError {
+    // Authentication
     #[error("invalid credentials")]
     InvalidCredentials,
+
+    #[error("authentication required")]
+    Unauthorized,
+
+    #[error("invalid token")]
+    InvalidToken,
 
     #[error("token expired")]
     TokenExpired,
@@ -24,23 +31,25 @@ pub enum ApiError {
     #[error("missing authorization header")]
     MissingAuthHeader,
 
-    #[error("invalid token")]
-    InvalidToken,
-
-    #[error("authentication required")]
-    Unauthorized,
-
+    // Authorization
     #[error("forbidden")]
     Forbidden,
-    #[error("validation error: {0}")]
+
+    // Validation
+    #[error("validation failed: {0}")]
     Validation(String),
 
+    // Resources
     #[error("repository not found")]
-    RepoNotFound,
+    RepositoryNotFound,
 
     #[error("repository already exists")]
-    RepoAlreadyExists,
+    RepositoryExists,
 
+    #[error("file not found")]
+    FileNotFound,
+
+    // Operations
     #[error("filesystem operation failed")]
     Filesystem,
 
@@ -53,67 +62,80 @@ pub enum ApiError {
     #[error("internal server error")]
     Internal,
 
-    #[error("commits listing for branch failed")]
-    CommitListingFailed,
-
-    #[error("could not find the specified file")]
-    FileNotFound,
+    // Specific cases
+    #[error("commit listing failed")]
+    CommitListing,
 
     #[error("unsupported file type")]
     UnsupportedFileType,
+}
 
-    #[error("dumb arbitrary file upload error")]
-    ArbitraryFileUpload,
+impl ApiError {
+    const fn status(&self) -> StatusCode {
+        match self {
+            Self::InvalidCredentials
+            | Self::Unauthorized
+            | Self::InvalidToken
+            | Self::TokenExpired => StatusCode::UNAUTHORIZED,
 
-    #[error("Failed to form a proper user IP")]
-    IpNetwork,
+            Self::MissingAuthHeader | Self::Validation(_) | Self::CommitListing => {
+                StatusCode::BAD_REQUEST
+            }
+
+            Self::Forbidden => StatusCode::FORBIDDEN,
+
+            Self::RepositoryNotFound | Self::FileNotFound => StatusCode::NOT_FOUND,
+
+            Self::RepositoryExists => StatusCode::CONFLICT,
+
+            Self::UnsupportedFileType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+
+            Self::Filesystem | Self::Git | Self::Database | Self::Internal => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        }
+    }
+
+    const fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidCredentials => "invalid_credentials",
+            Self::Unauthorized => "unauthorized",
+            Self::InvalidToken => "invalid_token",
+            Self::TokenExpired => "token_expired",
+            Self::MissingAuthHeader => "missing_auth_header",
+
+            Self::Forbidden => "forbidden",
+
+            Self::Validation(_) => "validation_error",
+
+            Self::RepositoryNotFound => "repository_not_found",
+            Self::RepositoryExists => "repository_exists",
+
+            Self::FileNotFound => "file_not_found",
+
+            Self::Filesystem => "filesystem_error",
+            Self::Git => "git_error",
+            Self::Database => "database_error",
+            Self::Internal => "internal_error",
+
+            Self::CommitListing => "commit_listing_failed",
+
+            Self::UnsupportedFileType => "unsupported_file_type",
+        }
+    }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, code) = match &self {
-            Self::InvalidCredentials => (StatusCode::UNAUTHORIZED, "invalid_credentials"),
+        let status = self.status();
+        let code = self.code();
 
-            Self::TokenExpired => (StatusCode::UNAUTHORIZED, "token_expired"),
-
-            Self::MissingAuthHeader => (StatusCode::BAD_REQUEST, "missing_auth_header"),
-
-            Self::InvalidToken => (StatusCode::UNAUTHORIZED, "invalid_token"),
-
-            Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
-
-            Self::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
-
-            Self::Validation(_) => (StatusCode::BAD_REQUEST, "validation_error"),
-
-            Self::RepoNotFound => (StatusCode::NOT_FOUND, "repo_not_found"),
-
-            Self::RepoAlreadyExists => (StatusCode::CONFLICT, "repo_already_exists"),
-
-            Self::Filesystem => (StatusCode::INTERNAL_SERVER_ERROR, "filesystem_error"),
-
-            Self::Git => (StatusCode::INTERNAL_SERVER_ERROR, "git_error"),
-
-            Self::Database => (StatusCode::INTERNAL_SERVER_ERROR, "database_error"),
-
-            Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
-
-            Self::CommitListingFailed => (StatusCode::BAD_REQUEST, "listing commits failed"),
-
-            Self::FileNotFound => (StatusCode::INTERNAL_SERVER_ERROR, "file not found"),
-
-            Self::UnsupportedFileType => (StatusCode::UNSUPPORTED_MEDIA_TYPE, "file not allowed"),
-
-            Self::ArbitraryFileUpload => {
-                (StatusCode::UNSUPPORTED_MEDIA_TYPE, "arbitrary error idk")
-            }
-            Self::IpNetwork => (StatusCode::BAD_REQUEST, "improper ip, "),
-        };
         tracing::error!(
             status = %status,
             error_code = code,
             error = ?self
         );
+
         (
             status,
             Json(ErrorResponse {
@@ -124,30 +146,20 @@ impl IntoResponse for ApiError {
             .into_response()
     }
 }
-impl From<ipnetwork::IpNetworkError> for ApiError {
-    fn from(err: ipnetwork::IpNetworkError) -> Self {
-        tracing::error!("network error: {:?}", err);
-        Self::IpNetwork
-    }
-}
 impl From<std::io::Error> for ApiError {
-    fn from(err: std::io::Error) -> Self {
-        tracing::error!("io error: {:?}", err);
+    fn from(_: std::io::Error) -> Self {
         Self::Filesystem
     }
 }
 
 impl From<sqlx::Error> for ApiError {
-    fn from(err: sqlx::Error) -> Self {
-        tracing::error!("database error: {:?}", err);
+    fn from(_: sqlx::Error) -> Self {
         Self::Database
     }
 }
 
 impl From<jsonwebtoken::errors::Error> for ApiError {
     fn from(err: jsonwebtoken::errors::Error) -> Self {
-        tracing::error!("jwt error: {:?}", err);
-
         use jsonwebtoken::errors::ErrorKind;
 
         match err.kind() {
@@ -156,84 +168,38 @@ impl From<jsonwebtoken::errors::Error> for ApiError {
         }
     }
 }
-#[derive(thiserror::Error, Debug)]
+#[derive(Error, Debug)]
 pub enum AuthError {
     #[error("invalid credentials")]
     InvalidCredentials,
-
     #[error("token expired")]
     TokenExpired,
-
     #[error("missing header: {0}")]
     MissingHeader(&'static str),
-
     #[error("duplicate email")]
     DuplicateEmail,
-
     #[error("duplicate username")]
     DuplicateUsername,
-
     #[error("invalid input: {0}")]
     InvalidInput(&'static str),
-
     #[error("password hashing failed")]
     PasswordHashing,
-
     #[error("password verification failed")]
     PasswordVerification,
-
     #[error("token generation failed")]
     TokenGen,
-
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
-
     #[error("jwt error: {0}")]
     Jwt(#[from] jsonwebtoken::errors::Error),
-
     #[error("randomness generator error: {0}")]
     Random(#[from] rand::rngs::SysError),
+    #[error("invalid client IP")]
+    InvalidIp(#[from] ipnetwork::IpNetworkError),
 }
-use std::borrow::Cow;
 
-impl IntoResponse for AuthError {
-    fn into_response(self) -> axum::response::Response {
-        let (status, msg): (StatusCode, Cow<'static, str>) = match self {
-            Self::InvalidCredentials => (
-                StatusCode::UNAUTHORIZED,
-                Cow::Borrowed("Invalid credentials"),
-            ),
-            Self::TokenExpired => (StatusCode::UNAUTHORIZED, Cow::Borrowed("Token expired")),
-            Self::MissingHeader(name) => (StatusCode::BAD_REQUEST, Cow::Borrowed(name)),
-            Self::DuplicateEmail => (StatusCode::CONFLICT, Cow::Borrowed("Email already exists")),
-            Self::DuplicateUsername => (
-                StatusCode::CONFLICT,
-                Cow::Borrowed("Username already exists"),
-            ),
-            Self::InvalidInput(details) => (StatusCode::BAD_REQUEST, Cow::Borrowed(details)),
-            Self::PasswordHashing => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Cow::Borrowed("Password hashing failed"),
-            ),
-            Self::PasswordVerification => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Cow::Borrowed("Password verification failed"),
-            ),
-            Self::TokenGen => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Cow::Borrowed("Token generation failed"),
-            ),
-            Self::Database(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Cow::Owned(err.to_string()),
-            ),
-            Self::Jwt(err) => (StatusCode::UNAUTHORIZED, Cow::Owned(err.to_string())),
-            Self::Random(_err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Cow::Borrowed("Source of randomness failed"),
-            ),
-        };
-
-        (status, msg).into_response()
+impl From<AuthError> for ApiError {
+    fn from(_: AuthError) -> Self {
+        Self::Internal
     }
 }

@@ -7,17 +7,15 @@ use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::phc::SaltString,
 };
 use axum::{
-    Json, Router,
+    Json,
     extract::{FromRequestParts, State},
     http::{StatusCode, header, request::Parts},
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
-use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode,
-};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, sync::Arc};
-use time::{Duration, UtcDateTime};
+use time::Duration;
 
 use base64::{Engine as _, engine::general_purpose};
 use rand::{TryRng, rngs::SysRng};
@@ -25,7 +23,6 @@ use sha2::{Digest, Sha256};
 use sqlx::{Executor, PgPool, Postgres, types::ipnetwork::IpNetwork};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
-use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
 use axum_client_ip::ClientIp;
@@ -190,19 +187,26 @@ pub fn hash_refresh_token(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }
 
-pub async fn store_refresh_token<'e, E>(executor: E, token: &str) -> Result<(), AuthError>
+pub async fn store_refresh_token<'e, E>(
+    executor: E,
+    token: &str,
+    session_id: Uuid,
+) -> Result<(), AuthError>
 where
     E: Executor<'e, Database = Postgres>,
 {
     let token_hash = hash_refresh_token(token);
-    let expires_at = OffsetDateTime::now_utc() + time::Duration::days(7);
+    let expires_at = OffsetDateTime::now_utc() + Duration::days(7);
+
     sqlx::query!(
         r#"
-        INSERT INTO refresh_tokens (token_hash, expires_at)
-        VALUES ($1, $2)
+        INSERT INTO refresh_tokens
+        (token_hash, session_id, expires_at)
+        VALUES ($1, $2, $3)
         "#,
         token_hash,
-        expires_at
+        session_id,
+        expires_at,
     )
     .execute(executor)
     .await
@@ -210,7 +214,6 @@ where
 
     Ok(())
 }
-
 pub fn generate_refresh_token() -> Result<String, AuthError> {
     let mut bytes = [0u8; 32];
     SysRng
@@ -263,7 +266,7 @@ pub async fn refresh(
         .map_err(AuthError::Database)?;
 
     let new_refresh = generate_refresh_token()?;
-    store_refresh_token(&mut *tx, &new_refresh).await?;
+    store_refresh_token(&mut *tx, &new_refresh, record.session_id).await?;
     tx.commit().await.map_err(AuthError::Database)?;
 
     let access_token = generate_access_token(record.user_id, record.session_id, state.jwt_secret)?;
@@ -337,7 +340,7 @@ pub async fn signup(
     let session_id = create_session(&state.pool, user_id, &meta).await?;
     let access_token = generate_access_token(user_id, session_id, state.jwt_secret)?;
     let refresh_token = generate_refresh_token()?;
-    store_refresh_token(&state.pool, &refresh_token).await?;
+    store_refresh_token(&state.pool, &refresh_token, session_id).await?;
 
     Ok(AuthResponse {
         access_token,
@@ -405,7 +408,7 @@ pub async fn signin(
 
     let refresh_token = generate_refresh_token()?;
 
-    store_refresh_token(&state.pool, &refresh_token).await?;
+    store_refresh_token(&state.pool, &refresh_token, session_id).await?;
 
     Ok(AuthResponse {
         access_token,
@@ -413,28 +416,116 @@ pub async fn signin(
     })
 }
 
-pub async fn signout(State(state): State<Arc<AppState>>, Json(req): Json<SignoutRequest>) {
-    //As long as they have a valid session id that hasn't been revoked, they are free to signout.
-    //We only signout of the session that was provided.
+pub async fn signout(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+) -> Result<(), AuthError> {
+    revoke_session_by_id(&state.pool, claims.sub, claims.sid).await
 }
 
-pub async fn revoke_session() {
-    //Revokes a specific session selected by the user.
-    //The user must have a valid session to complete this action.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RevocationRequest {
+    refresh_token: String,
+    access_token: String,
+    session_id: Uuid,
 }
 
-pub async fn revoke_all_sessions() {
-    //Revokes all sessions currently associated with the user.
-    //The user must have a valid session to complete this action.
+async fn revoke_session_by_id(
+    pool: &PgPool,
+    user_id: Uuid,
+    session_id: Uuid,
+) -> Result<(), AuthError> {
+    let mut tx = pool.begin().await.map_err(AuthError::Database)?;
+
+    let result = sqlx::query!(
+        r#"
+        UPDATE sessions
+        SET revoked_at = NOW()
+        WHERE id = $1
+          AND user_id = $2
+          AND revoked_at IS NULL
+        "#,
+        session_id,
+        user_id,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(AuthError::Database)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AuthError::SessionRevoked);
+    }
+
+    sqlx::query!(
+        r#"
+        DELETE FROM refresh_tokens
+        WHERE session_id = $1
+        "#,
+        session_id,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(AuthError::Database)?;
+
+    tx.commit().await.map_err(AuthError::Database)?;
+
+    Ok(())
 }
 
-//Helpers for paths where the user should be authenicated but does not require explicit
-//permission DB checks. Basically just access token level checks.
-pub fn auth_required(auth_header: &str, secret: &'static [u8]) -> Result<Claims, AuthError> {
+pub async fn revoke_all_sessions(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+) -> Result<(), AuthError> {
+    sqlx::query!(
+        r#"
+        UPDATE sessions
+        SET revoked_at = NOW()
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+        "#,
+        claims.sub,
+    )
+    .execute(&state.pool)
+    .await
+    .map_err(AuthError::Database)?;
+
+    Ok(())
+}
+
+pub async fn auth_required(
+    executor: &PgPool,
+    auth_header: &str,
+    secret: &'static [u8],
+) -> Result<Claims, AuthError> {
     let token = auth_header
         .strip_prefix("Bearer ")
         .ok_or(AuthError::InvalidCredentials)?;
-    verify_token(token, secret)
+    let claims = verify_token(token, secret)?;
+    //Can be removed and replaced for Redis/Valkey if db reads are a bottleneck.
+
+    let valid_sid = sqlx::query_scalar!(
+        r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM sessions
+                WHERE id = $1
+                  AND user_id = $2
+                  AND revoked_at IS NULL
+            )
+            "#,
+        claims.sid,
+        claims.sub,
+    )
+    .fetch_one(executor)
+    .await
+    .map_err(AuthError::Database)?
+    .unwrap_or(false);
+
+    if !valid_sid {
+        Err(AuthError::SessionRevoked)
+    } else {
+        Ok(claims)
+    }
 }
 
 pub struct AuthUser(pub Claims);
@@ -452,7 +543,9 @@ impl FromRequestParts<Arc<AppState>> for AuthUser {
             .and_then(|v| v.to_str().ok())
             .ok_or(AuthError::MissingHeader("Authorization"))?;
 
-        Ok(Self(auth_required(auth_header, state.jwt_secret)?))
+        Ok(Self(
+            auth_required(&state.pool, auth_header, state.jwt_secret).await?,
+        ))
     }
 }
 
@@ -465,11 +558,17 @@ impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
         parts: &mut Parts,
         state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
-        let claims = parts
+        let auth_header = parts
             .headers
             .get(header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|auth_header| auth_required(auth_header, state.jwt_secret).ok());
+            .and_then(|v| v.to_str().ok());
+
+        let claims = match auth_header {
+            Some(auth_header) => auth_required(&state.pool, auth_header, state.jwt_secret)
+                .await
+                .ok(),
+            None => None,
+        };
 
         Ok(Self(claims))
     }

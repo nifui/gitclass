@@ -16,6 +16,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, deco
 use serde::{Deserialize, Serialize};
 use std::{str::FromStr, sync::Arc};
 use time::Duration;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 use base64::{Engine as _, engine::general_purpose};
 use rand::{TryRng, rngs::SysRng};
@@ -71,7 +72,7 @@ where
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Claims {
     //The resource being targetted.
     pub sub: Uuid,
@@ -97,7 +98,7 @@ pub struct SignupRequest {
     pub password: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct SignoutRequest {
     //Require a refresh token as we want toe examine the session_id and log out of it.
     pub refresh_token: String,
@@ -106,12 +107,12 @@ pub struct SignoutRequest {
     pub access_token: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct SigninRequest {
     pub identifier: String,
     pub password: String,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AuthResponse {
     pub access_token: String,
     pub refresh_token: String,
@@ -222,6 +223,17 @@ pub fn generate_refresh_token() -> Result<String, AuthError> {
     Ok(general_purpose::URL_SAFE_NO_PAD.encode(bytes))
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    request_body = RefreshRequest,
+    responses(
+        (status = 200, description = "New tokens issued", body = AuthResponse),
+        (status = 401, description = "Invalid or expired refresh token"),
+        (status = 403, description = "Session revoked")
+    ),
+    tag = "Authentication"
+)]
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RefreshRequest>,
@@ -302,13 +314,17 @@ pub async fn create_session(
     Ok(session_id)
 }
 
-//Verify the request is valid(password length/strength, eg)
-//Create a user.
-//Issue a session for the user.
-//Once we issued the session we hand out a refresh token.
-//Then we hand out a access token based off of the refresh token.
-//Return an access and refresh token.
-//
+#[utoipa::path(
+    post,
+    path = "/auth/signup",
+    request_body = SignupRequest,
+    responses(
+        (status = 200, description = "Successfully registered and signed in", body = AuthResponse),
+        (status = 400, description = "Invalid input or password too short"),
+        (status = 409, description = "Email or username already exists")
+    ),
+    tag = "Authentication"
+)]
 pub async fn signup(
     State(state): State<Arc<AppState>>,
     meta: ClientMeta,
@@ -348,6 +364,16 @@ pub async fn signup(
     })
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/signin",
+    request_body = SigninRequest,
+    responses(
+        (status = 200, description = "Successfully authenticated", body = AuthResponse),
+        (status = 401, description = "Invalid credentials")
+    ),
+    tag = "Authentication"
+)]
 pub async fn signin(
     State(state): State<Arc<AppState>>,
     meta: ClientMeta,
@@ -416,6 +442,18 @@ pub async fn signin(
     })
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/signout",
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "Successfully signed out"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "Authentication"
+)]
 pub async fn signout(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
@@ -429,7 +467,25 @@ pub struct RevocationRequest {
     access_token: String,
     session_id: Uuid,
 }
-
+#[utoipa::path(
+    post,
+    path = "/auth/revoke",
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "Session revoked successfully"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "Authentication"
+)]
+async fn revoke_session(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+    Json(uuid): Json<Uuid>,
+) -> Result<(), AuthError> {
+    revoke_session_by_id(&state.pool, claims.sub, uuid).await
+}
 async fn revoke_session_by_id(
     pool: &PgPool,
     user_id: Uuid,
@@ -442,8 +498,8 @@ async fn revoke_session_by_id(
         UPDATE sessions
         SET revoked_at = NOW()
         WHERE id = $1
-          AND user_id = $2
-          AND revoked_at IS NULL
+            AND user_id = $2
+            AND revoked_at IS NULL
         "#,
         session_id,
         user_id,
@@ -472,6 +528,18 @@ async fn revoke_session_by_id(
     Ok(())
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/revoke_all",
+    security(
+        ("bearer_auth" = [])
+    ),
+    responses(
+        (status = 200, description = "All sessions revoked successfully"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "Authentication"
+)]
 pub async fn revoke_all_sessions(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
@@ -481,7 +549,7 @@ pub async fn revoke_all_sessions(
         UPDATE sessions
         SET revoked_at = NOW()
         WHERE user_id = $1
-          AND revoked_at IS NULL
+            AND revoked_at IS NULL
         "#,
         claims.sub,
     )
@@ -505,14 +573,14 @@ pub async fn auth_required(
 
     let valid_sid = sqlx::query_scalar!(
         r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM sessions
-                WHERE id = $1
-                  AND user_id = $2
-                  AND revoked_at IS NULL
-            )
-            "#,
+        SELECT EXISTS (
+            SELECT 1
+            FROM sessions
+            WHERE id = $1
+              AND user_id = $2
+              AND revoked_at IS NULL
+        )
+        "#,
         claims.sid,
         claims.sub,
     )
@@ -573,5 +641,66 @@ impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
         Ok(Self(claims))
     }
 }
+#[utoipa::path(
+    post, 
+    path = "/auth/admin", 
+    request_body = String, 
+    responses(
+        (status = 200, description = "Succesfully acquired admin")
+    ),
+    tag = "Authentication"
+)]
+pub async fn admin_auth(State(state): State<Arc<AppState>>, AuthUser(claims): AuthUser, Json(code): Json<String>) -> Result<(), AuthError> {
+    let hash = sqlx::query!(r#"
+        SELECT code_hash 
+        FROM pincode 
+        WHERE expires_at < $1
+        "#, 
+    OffsetDateTime::now_utc())
+    .fetch_optional(&state.pool).await?;
+    //Means that there is not a valid hash to compare against.
+    if let Some(hash) = hash && hash.code_hash == code {
+    } else {
+        return Err(AuthError::InvalidCredentials);
+    }
 
-pub async fn generate_admin_code() {}
+    //Verify against the already existing code. 
+    //We either use a dedicatd table for this in the database or we just go with Redis/Valkey.
+    //Once they have admin perms, we disable this route to prevent anybody else from acquiring it or
+    //we can make it so other people can acquire admin.
+    Ok(())
+}
+//How should this be invoked/called? 
+//Via an API endpoint or directly via the server.
+//I think the latter is better for overall security. 
+pub async fn generate_admin_code(state: Arc<AppState>) -> Result<(), AuthError>   {
+    let random_value = SysRng.try_next_u32()?;
+    //Modulates the rand val to get a 6 digit pin. 
+    let pin = format!("{:06}", random_value % 1_000_000);
+    let hash = hash_password(&pin)?;
+    //Make sure to check prior if there is an already existing row within the table.
+    //If there already exists a code, we overwrite it. 
+    //This basically handles cleanup without needing to scheldule a job.
+    sqlx::query!(r#"
+        TRUNCATE pincode;
+    "#).execute(&state.pool).await?;
+    sqlx::query_scalar!(r#"
+        INSERT INTO pincode (code_hash, expires_at)
+        VALUES ($1, $2)
+        "#, 
+        hash, 
+        OffsetDateTime::now_utc() + Duration::minutes(5)
+    ).fetch_one(&state.pool).await.map_err(AuthError::Database)?;
+    Ok(())
+}
+
+pub fn router() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(signup))
+        .routes(routes!(signin))
+        .routes(routes!(refresh))
+        .routes(routes!(signout))
+        .routes(routes!(revoke_session))
+        .routes(routes!(admin_auth))
+        .routes(routes!(revoke_all_sessions))
+}

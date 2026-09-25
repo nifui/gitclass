@@ -1,4 +1,4 @@
-use backend::AppState;
+use backend::{AppState, routes::auth};
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::{Arc, OnceLock};
@@ -56,6 +56,7 @@ async fn main() {
 
     let (router, mut openapi) = router()
         .routes(routes!(health))
+        .merge(auth::router())
         .with_state(state)
         .split_for_parts();
 

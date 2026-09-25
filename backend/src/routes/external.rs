@@ -25,3 +25,15 @@ pub fn add_external_identity(
     Json(req): Json<ExternalIdentityRequest>,
 ) {
 }
+//Defines a trait for subscription to Webhooks for providers as they are not standardized.
+//Does not have to be a Webhook but some sort of evevnt system.
+pub trait Subscriber {
+    fn subscribe();
+    fn unsubscribe();
+}
+pub struct InternalSubscriber {}
+
+impl Subscriber for InternalSubscriber {
+    fn subscribe() {}
+    fn unsubscribe() {}
+}

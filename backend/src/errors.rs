@@ -199,7 +199,11 @@ pub enum AuthError {
     #[error("invalid client IP")]
     InvalidIp(#[from] ipnetwork::IpNetworkError),
 }
-
+impl IntoResponse for AuthError {
+    fn into_response(self) -> Response {
+        ApiError::from(self).into_response()
+    }
+}
 impl From<AuthError> for ApiError {
     fn from(_: AuthError) -> Self {
         Self::Internal

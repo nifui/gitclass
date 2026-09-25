@@ -79,7 +79,4 @@ Moka would work for lightweight implementation thats non distributed.
 Session table might be missing something. 
 
 
-TODO 
-    - Implement proper jti usage. 
-    - Implement sessions table. 
-    - 
+

@@ -7,8 +7,8 @@ CREATE TABLE assignments (
     instructions TEXT,
     assigned_at TIMESTAMPTZ,
     due_at TIMESTAMPTZ,
-    total_points NUMERIC(10,2) NOT NULL DEFAULT 0
-        CHECK (total_points >= 0),
+    total_points INTEGER NOT NULL DEFAULT 0
+         CHECK (total_points >= 0),
     status assignment_status NOT NULL DEFAULT 'DRAFT',
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

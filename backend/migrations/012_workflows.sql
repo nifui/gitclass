@@ -52,8 +52,10 @@ CREATE TABLE workflow_test_results (
     workflow_run_id UUID NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
     test_name TEXT NOT NULL,
     status test_result_status NOT NULL,
-    points NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (points >= 0),
-    max_points NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (max_points >= 0),
+    points INTEGER NOT NULL DEFAULT 0
+         CHECK (total_points >= 0),
+    max_points INTEGER NOT NULL DEFAULT 0
+         CHECK (total_points >= 0),
     duration_ms BIGINT CHECK (duration_ms IS NULL OR duration_ms >= 0),
     message TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

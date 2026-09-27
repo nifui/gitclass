@@ -1,3 +1,6 @@
+//Since it might be easier to just add a roster and have it be done, I'll add an option for display
+//names and password only. Local only limits some of the auth stuff as it would be overkill but
+//makes designing stuff a lot easier.
 use crate::{
     AppState,
     errors::{ApiError, AuthError},
@@ -14,7 +17,7 @@ use axum::{
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, sync::Arc};
+use std::{convert::Infallible, str::FromStr, sync::Arc};
 use time::Duration;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -620,7 +623,7 @@ impl FromRequestParts<Arc<AppState>> for AuthUser {
 pub struct MaybeAuthUser(pub Option<Claims>);
 
 impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
-    type Rejection = std::convert::Infallible;
+    type Rejection = Infallible;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -639,6 +642,50 @@ impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
         };
 
         Ok(Self(claims))
+    }
+}
+#[derive(Debug, Clone, sqlx::Type)]
+#[sqlx(type_name = "system_role", rename_all = "UPPERCASE")]
+pub enum SystemRole {
+    Admin,
+    User,
+}
+#[derive(Debug)]
+struct UserRole {
+    system_role: SystemRole,
+}
+pub struct AdminUser(pub Claims); 
+impl FromRequestParts<Arc<AppState>> for AdminUser {
+    type Rejection = Infallible;
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &Arc<AppState>,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send
+    {
+        let auth_header = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or(AuthError::MissingHeader("Authorization"))?;
+
+        let claims = auth_required(&state.pool, auth_header, state.jwt_secret).await?;
+        //Check permissions now. 
+        let role = sqlx::query_as!(
+            UserRole,
+            r#"
+            SELECT system_role as "system_role: SystemRole"
+            FROM users
+            WHERE id = $1
+            "#,
+            &claims.sub
+        )
+        .fetch_optional(&state.pool)
+        .await?.ok_or(AuthError::InvalidCredentials)?;
+        if role.system_role == SystemRole::User {
+            return Err(AuthError::InvalidCredentials);
+        } else {
+            return Ok(claims);
+        }
     }
 }
 #[utoipa::path(

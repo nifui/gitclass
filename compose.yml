@@ -15,5 +15,19 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
 
+  valkey:
+    image: valkey/valkey:latest
+    container_name: myapp-valkey
+    restart: unless-stopped
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - valkey_data:/data
+
+    command: valkey-server --appendonly yes
+
 volumes:
   postgres_data:
+  valkey_data:

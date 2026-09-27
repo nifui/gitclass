@@ -16,6 +16,7 @@ use axum::{
     response::IntoResponse,
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, str::FromStr, sync::Arc};
 use time::Duration;
@@ -547,19 +548,20 @@ pub async fn revoke_all_sessions(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
 ) -> Result<(), AuthError> {
-    sqlx::query!(
+    let id = sqlx::query!(
         r#"
         UPDATE sessions
         SET revoked_at = NOW()
         WHERE user_id = $1
             AND revoked_at IS NULL
+        RETURNING id;
         "#,
         claims.sub,
-    )
-    .execute(&state.pool)
-    .await
-    .map_err(AuthError::Database)?;
-
+    ).fetch_one(&state.pool).await?.id;
+    let mut conn = state.redis_conn.clone();
+    //Very arbritrary value. Can't figure out what to base the TTL off of.
+    //Could just be a general purpose cache value instead.
+    conn.sadd(format!("sessions:{}", id), "sessions").await?;
     Ok(())
 }
 

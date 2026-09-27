@@ -1,6 +1,5 @@
 pub mod errors;
 pub mod routes;
-pub mod utils;
 
 use sqlx::PgPool;
 

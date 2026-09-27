@@ -21,6 +21,7 @@ pub fn map_sqlx_error(err: sqlx::Error) -> AuthError {
 pub struct AppState {
     pub pool: PgPool,
     pub jwt_secret: &'static [u8],
+    pub redis_conn: redis::aio::MultiplexedConnection,
 }
 
 //Idea for allowing swapping Git Providers if in the future a self-hosted git storage is desired.

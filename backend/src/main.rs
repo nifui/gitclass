@@ -1,7 +1,10 @@
 use backend::{AppState, routes::auth};
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
-use std::sync::{Arc, OnceLock};
+use std::{
+    ops::Mul,
+    sync::{Arc, OnceLock},
+};
 use tokio::net::TcpListener;
 use utoipa::{
     OpenApi,
@@ -42,15 +45,18 @@ async fn main() {
 
     let serve_address = std::env::var("SERVE_ADDRESS").expect("SERVE_ADDRESS must be set.");
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set.");
-
+    let valkey_url = std::env::var("VALKEY_URL").expect("VAKEY_URL must be set.");
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
         .await
         .expect("Failed to connect to database");
+    let redis_client = redis::Client::open(valkey_url)?;
+    let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
 
     let state = Arc::new(AppState {
         pool,
+        redis_conn,
         jwt_secret: jwt_secret(),
     });
 

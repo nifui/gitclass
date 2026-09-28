@@ -4,7 +4,7 @@ CREATE TABLE rubrics (
     assignment_id UUID NOT NULL REFERENCES assignments(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
-    max_points total_points INTEGER NOT NULL DEFAULT 0
+    max_points INTEGER NOT NULL DEFAULT 0
             CHECK (max_points >= 0),
     order_index INTEGER NOT NULL DEFAULT 0 CHECK (order_index >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()

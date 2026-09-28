@@ -51,8 +51,12 @@ async fn main() {
         .connect(&database_url)
         .await
         .expect("Failed to connect to database");
-    let redis_client = redis::Client::open(valkey_url)?;
-    let mut redis_conn = redis_client.get_multiplexed_async_connection().await?;
+    let redis_client =
+        redis::Client::open(valkey_url).expect("Redis client could not be established.");
+    let redis_conn = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .expect("Redis connection could not be acquired.");
 
     let state = Arc::new(AppState {
         pool,

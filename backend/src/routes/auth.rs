@@ -1,6 +1,16 @@
 //Since it might be easier to just add a roster and have it be done, I'll add an option for display
 //names and password only. Local only limits some of the auth stuff as it would be overkill but
 //makes designing stuff a lot easier.
+
+//File getting really big so I might make it it's own folder. 
+//TO DO: 
+// - Add sv(session_version) field to JWT for sesssion revocation. 
+// - Use a faster hash for the admin code. 
+// - Implement Redis caching for session revocation(both sv + sid level).
+// - Implement Redis caching for admin pin generation and remove Postgres table pincode. 
+//EXPLANATION
+// - For the admin pi
+
 use crate::{
     AppState,
     errors::{ApiError, AuthError},
@@ -253,7 +263,7 @@ pub async fn refresh(
             rt.expires_at, 
             s.user_id,
             s.revoked_at
-        FROM refresh_tokens rt
+r       FROM refresh_tokens rt
         JOIN sessions s ON rt.session_id = s.id
         WHERE rt.token_hash = $1
         AND s.revoked_at != $2
@@ -269,8 +279,8 @@ pub async fn refresh(
     if record.expires_at < OffsetDateTime::now_utc() {
         return Err(AuthError::TokenExpired);
     }
-
-    if let Some(timestamp) = record.revoked_at
+    //No clue why revoked_at isn't a valid Record field, but member r seems to satisfy it?
+    if let Some(timestamp) = record.r
         && timestamp < OffsetDateTime::now_utc()
     {
         return Err(AuthError::SessionRevoked);
@@ -558,10 +568,6 @@ pub async fn revoke_all_sessions(
         "#,
         claims.sub,
     ).fetch_one(&state.pool).await?.id;
-    let mut conn = state.redis_conn.clone();
-    //Very arbritrary value. Can't figure out what to base the TTL off of.
-    //Could just be a general purpose cache value instead.
-    conn.sadd(format!("sessions:{}", id), "sessions").await?;
     Ok(())
 }
 
@@ -646,7 +652,7 @@ impl FromRequestParts<Arc<AppState>> for MaybeAuthUser {
         Ok(Self(claims))
     }
 }
-#[derive(Debug, Clone, sqlx::Type)]
+#[derive(Debug, Clone, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "system_role", rename_all = "UPPERCASE")]
 pub enum SystemRole {
     Admin,
@@ -658,11 +664,12 @@ struct UserRole {
 }
 pub struct AdminUser(pub Claims); 
 impl FromRequestParts<Arc<AppState>> for AdminUser {
-    type Rejection = Infallible;
+    type Rejection = AuthError;
+
     async fn from_request_parts(
         parts: &mut Parts,
         state: &Arc<AppState>,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send
+    ) -> Result<Self, Self::Rejection>
     {
         let auth_header = parts
             .headers
@@ -686,7 +693,7 @@ impl FromRequestParts<Arc<AppState>> for AdminUser {
         if role.system_role == SystemRole::User {
             return Err(AuthError::InvalidCredentials);
         } else {
-            return Ok(claims);
+            return Ok(AdminUser(claims));
         }
     }
 }
@@ -700,19 +707,24 @@ impl FromRequestParts<Arc<AppState>> for AdminUser {
     tag = "Authentication"
 )]
 pub async fn admin_auth(State(state): State<Arc<AppState>>, AuthUser(claims): AuthUser, Json(code): Json<String>) -> Result<(), AuthError> {
+    
     let hash = sqlx::query!(r#"
         SELECT code_hash 
         FROM pincode 
-        WHERE expires_at < $1
+        WHERE expires_at > $1
         "#, 
     OffsetDateTime::now_utc())
     .fetch_optional(&state.pool).await?;
     //Means that there is not a valid hash to compare against.
-    if let Some(hash) = hash && hash.code_hash == code {
+    if let Some(record) = hash 
+        && verify_password(
+            &code,
+            &record.code_hash
+        )? {
+            
     } else {
-        return Err(AuthError::InvalidCredentials);
+        return Err(AuthError::InvalidCredentials); 
     }
-
     //Verify against the already existing code. 
     //We either use a dedicatd table for this in the database or we just go with Redis/Valkey.
     //Once they have admin perms, we disable this route to prevent anybody else from acquiring it or

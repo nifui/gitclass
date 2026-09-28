@@ -263,7 +263,7 @@ pub async fn refresh(
             rt.expires_at, 
             s.user_id,
             s.revoked_at
-r       FROM refresh_tokens rt
+        FROM refresh_tokens rt
         JOIN sessions s ON rt.session_id = s.id
         WHERE rt.token_hash = $1
         AND s.revoked_at != $2
@@ -279,8 +279,7 @@ r       FROM refresh_tokens rt
     if record.expires_at < OffsetDateTime::now_utc() {
         return Err(AuthError::TokenExpired);
     }
-    //No clue why revoked_at isn't a valid Record field, but member r seems to satisfy it?
-    if let Some(timestamp) = record.r
+    if let Some(timestamp) = record.revoked_at
         && timestamp < OffsetDateTime::now_utc()
     {
         return Err(AuthError::SessionRevoked);

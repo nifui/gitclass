@@ -78,5 +78,5 @@ Gonna use Redis in case we want this backend to be distributed later on.
 Moka would work for lightweight implementation thats non distributed.
 Session table might be missing something. 
 
-
+For templates, the teacher can associate a template with the assignment. The frontend must query if there exists templates for a repository, if yes fetch them and the user cna then clone based off of those templates that were provided. 
 

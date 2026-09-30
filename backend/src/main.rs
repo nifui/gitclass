@@ -1,10 +1,10 @@
-use backend::{AppState, routes::auth};
+use backend::{
+    AppState,
+    routes::auth::{self},
+};
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
-use std::{
-    ops::Mul,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 use tokio::net::TcpListener;
 use utoipa::{
     OpenApi,

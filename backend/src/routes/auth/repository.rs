@@ -1,6 +1,6 @@
 // auth_repository.rs
 
-use crate::routes::temp::models::ClientMeta;
+use crate::routes::auth::models::ClientMeta;
 use crate::{errors::AuthError, map_sqlx_error};
 
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ pub struct UserInfo {
     pub id: Uuid,
     pub password_hash: String,
 }
-#[derive(Serialize, Deserialize, sqlx::Type)]
+#[derive(Eq, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "system_role", rename_all = "UPPERCASE")]
 pub enum SystemRole {
     User,

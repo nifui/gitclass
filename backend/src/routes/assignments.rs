@@ -33,7 +33,7 @@ pub struct Assignment {
 
 use crate::{
     AppState,
-    routes::auth::{AdminUser, AuthUser},
+    middleware::auth::{AdminUser, AuthUser},
 };
 
 enum Triggers {}

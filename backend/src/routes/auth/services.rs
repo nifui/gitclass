@@ -1,6 +1,6 @@
 use crate::{
     errors::AuthError,
-    routes::temp::{
+    routes::auth::{
         models::*,
         repository::{
             create_session, create_user, delete_refresh_token, find_refresh_token, find_session,
@@ -122,7 +122,7 @@ pub async fn refresh(
     })
 }
 pub async fn signup(
-    pool: PgPool,
+    pool: &PgPool,
     meta: ClientMeta,
     req: SignupRequest,
     jwt_secret: &'static [u8],
@@ -134,11 +134,11 @@ pub async fn signup(
     }
     let email = req.email.to_lowercase();
     let password_hash = hash_password(&req.password)?;
-    let user_id = create_user(&pool, email, req.username, password_hash).await?;
-    let session_id = create_session(&pool, user_id, &meta).await?;
+    let user_id = create_user(pool, email, req.username, password_hash).await?;
+    let session_id = create_session(pool, user_id, &meta).await?;
     let access_token = generate_access_token(user_id, session_id, jwt_secret)?;
     let refresh_token = generate_refresh_token()?;
-    store_refresh_token(&pool, &refresh_token, session_id).await?;
+    store_refresh_token(pool, &refresh_token, session_id).await?;
 
     Ok(AuthResponse {
         access_token,
@@ -190,7 +190,7 @@ pub async fn signout(pool: PgPool, session_id: Uuid, user_id: Uuid) -> Result<()
     revoke_session_by_id(pool, user_id, session_id).await
 }
 
-async fn revoke_session_by_id(
+pub async fn revoke_session_by_id(
     pool: PgPool,
     user_id: Uuid,
     session_id: Uuid,

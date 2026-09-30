@@ -1,6 +1,6 @@
 pub mod errors;
-pub mod middleware;
 pub mod routes;
+
 use sqlx::PgPool;
 
 use crate::errors::AuthError;

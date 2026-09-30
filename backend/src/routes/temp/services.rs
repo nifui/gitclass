@@ -4,7 +4,7 @@ use crate::{
         models::*,
         repository::{
             create_session, create_user, delete_refresh_token, find_refresh_token, find_session,
-            find_user_by_identifier, store_refresh_token,
+            find_user_by_identifier, revoke_session, session_exists, store_refresh_token,
         },
     },
 };
@@ -184,4 +184,38 @@ pub async fn signin(
         access_token,
         refresh_token,
     })
+}
+
+pub async fn signout(pool: PgPool, session_id: Uuid, user_id: Uuid) -> Result<(), AuthError> {
+    revoke_session_by_id(pool, user_id, session_id).await
+}
+
+async fn revoke_session_by_id(
+    pool: PgPool,
+    user_id: Uuid,
+    session_id: Uuid,
+) -> Result<(), AuthError> {
+    let mut tx = pool.begin().await.map_err(AuthError::Database)?;
+    revoke_session(&mut *tx, user_id, session_id).await?;
+
+    tx.commit().await.map_err(AuthError::Database)?;
+    Ok(())
+}
+
+pub async fn auth_required(
+    executor: &PgPool,
+    auth_header: &str,
+    secret: &'static [u8],
+) -> Result<Claims, AuthError> {
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(AuthError::InvalidCredentials)?;
+    let claims = verify_token(token, secret)?;
+    //Can be removed and replaced for Redis/Valkey if db reads are a bottleneck.
+    let valid_sid = session_exists(executor, claims.sub, claims.sid).await?;
+    if !valid_sid {
+        Err(AuthError::SessionRevoked)
+    } else {
+        Ok(claims)
+    }
 }

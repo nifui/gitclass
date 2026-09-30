@@ -1,99 +1,18 @@
-use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgPool};
-use time::OffsetDateTime;
+use crate::routes::assignment::{AssignmentError, models::*};
+use sqlx::{Executor, Postgres};
 use uuid::Uuid;
 
-// --- Enums ---
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "assignment_status", rename_all = "UPPERCASE")]
-pub enum AssignmentStatus {
-    Draft,
-    Published,
-    Closed,
-    Archived,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "assignment_student_status", rename_all = "UPPERCASE")]
-pub enum AssignmentStudentStatus {
-    Assigned,
-    Started,
-    Submitted,
-    Graded,
-    Exempt,
-}
-
-// --- Models ---
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct Assignment {
-    pub id: Uuid,
-    pub class_id: Uuid,
-    pub title: String,
-    pub description: Option<String>,
-    pub instructions: Option<String>,
-    pub assigned_at: Option<OffsetDateTime>,
-    pub due_at: Option<OffsetDateTime>,
-    pub total_points: i32,
-    pub status: AssignmentStatus,
-    pub created_by: Uuid,
-    pub created_at: OffsetDateTime,
-    pub updated_at: OffsetDateTime,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct AssignmentStudent {
-    pub id: Uuid,
-    pub assignment_id: Uuid,
-    pub student_id: Uuid,
-    pub status: AssignmentStudentStatus,
-    pub assigned_at: OffsetDateTime,
-    pub started_at: Option<OffsetDateTime>,
-    pub submitted_at: Option<OffsetDateTime>,
-    pub graded_at: Option<OffsetDateTime>,
-    pub created_at: OffsetDateTime,
-    pub updated_at: OffsetDateTime,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct AssignmentRepositoryLink {
-    pub assignment_id: Uuid,
-    pub repository_id: Uuid,
-    pub student_id: Option<Uuid>,
-    pub created_at: OffsetDateTime,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct CreateAssignmentPayload {
-    pub class_id: Uuid,
-    pub title: String,
-    pub description: Option<String>,
-    pub instructions: Option<String>,
-    pub assigned_at: Option<OffsetDateTime>,
-    pub due_at: Option<OffsetDateTime>,
-    pub total_points: i32,
-    pub created_by: Uuid,
-}
-
-#[derive(Clone)]
-pub struct AssignmentRepository {
-    pool: PgPool,
-}
-
-impl AssignmentRepository {
-    pub const fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
-
-    /// Create a new assignment
-    pub async fn create_assignment(
-        &self,
-        payload: CreateAssignmentPayload,
-    ) -> Result<Assignment, sqlx::Error> {
-        sqlx::query_as!(
-            Assignment,
-            r#"
+/// Create a new assignment
+pub async fn create_assignment<'e, E>(
+    executor: E,
+    payload: CreateAssignmentPayload,
+) -> Result<Assignment, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query_as!(
+        Assignment,
+        r#"
             INSERT INTO assignments (
                 class_id, title, description, instructions, 
                 assigned_at, due_at, total_points, created_by
@@ -105,27 +24,30 @@ impl AssignmentRepository {
                 status AS "status: AssignmentStatus", 
                 created_by, created_at, updated_at
             "#,
-            payload.class_id,
-            payload.title,
-            payload.description,
-            payload.instructions,
-            payload.assigned_at,
-            payload.due_at,
-            payload.total_points,
-            payload.created_by
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
+        payload.class_id,
+        payload.title,
+        payload.description,
+        payload.instructions,
+        payload.assigned_at,
+        payload.due_at,
+        payload.total_points,
+        payload.created_by
+    )
+    .fetch_one(executor)
+    .await
+}
 
-    /// Fetch a single assignment by ID
-    pub async fn get_assignment(
-        &self,
-        assignment_id: Uuid,
-    ) -> Result<Option<Assignment>, sqlx::Error> {
-        sqlx::query_as!(
-            Assignment,
-            r#"
+/// Fetch a single assignment by ID
+pub async fn get_assignment<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+) -> Result<Option<Assignment>, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query_as!(
+        Assignment,
+        r#"
             SELECT 
                 id, class_id, title, description, instructions, 
                 assigned_at, due_at, total_points, 
@@ -134,21 +56,24 @@ impl AssignmentRepository {
             FROM assignments
             WHERE id = $1
             "#,
-            assignment_id
-        )
-        .fetch_optional(&self.pool)
-        .await
-    }
+        assignment_id
+    )
+    .fetch_optional(executor)
+    .await
+}
 
-    /// Assign a student to an assignment
-    pub async fn assign_student(
-        &self,
-        assignment_id: Uuid,
-        student_id: Uuid,
-    ) -> Result<AssignmentStudent, sqlx::Error> {
-        sqlx::query_as!(
-            AssignmentStudent,
-            r#"
+/// Assign a student to an assignment
+pub async fn assign_student<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+    student_id: Uuid,
+) -> Result<AssignmentStudent, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query_as!(
+        AssignmentStudent,
+        r#"
             INSERT INTO assignment_students (assignment_id, student_id)
             VALUES ($1, $2)
             RETURNING 
@@ -157,23 +82,25 @@ impl AssignmentRepository {
                 assigned_at, started_at, submitted_at, graded_at, 
                 created_at, updated_at
             "#,
-            assignment_id,
-            student_id
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
+        assignment_id,
+        student_id
+    )
+    .fetch_one(executor)
+    .await
+}
 
-    /// Update a student's assignment status (e.g. from ASSIGNED to SUBMITTED)
-    /// Update a student's assignment status (e.g. from ASSIGNED to SUBMITTED)
-    pub async fn update_student_status(
-        &self,
-        assignment_id: Uuid,
-        student_id: Uuid,
-        new_status: AssignmentStudentStatus,
-    ) -> Result<AssignmentStudent, sqlx::Error> {
-        let now = time::OffsetDateTime::now_utc();
-        sqlx::query_as!(
+/// Update a student's assignment status (e.g. from ASSIGNED to SUBMITTED)
+pub async fn update_student_status<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+    student_id: Uuid,
+    new_status: AssignmentStudentStatus,
+) -> Result<AssignmentStudent, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let now = time::OffsetDateTime::now_utc();
+    sqlx::query_as!(
             AssignmentStudent,
             r#"
             UPDATE assignment_students
@@ -195,41 +122,47 @@ impl AssignmentRepository {
             assignment_id,
             student_id
         )
-        .fetch_one(&self.pool)
+        .fetch_one(executor)
         .await
-    }
-    /// Link a repository to an assignment (and optionally to a student)
-    pub async fn link_repository(
-        &self,
-        assignment_id: Uuid,
-        repository_id: Uuid,
-        student_id: Option<Uuid>,
-    ) -> Result<AssignmentRepositoryLink, sqlx::Error> {
-        sqlx::query_as!(
-            AssignmentRepositoryLink,
-            r#"
+}
+/// Link a repository to an assignment (and optionally to a student)
+pub async fn link_repository<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+    repository_id: Uuid,
+    student_id: Option<Uuid>,
+) -> Result<AssignmentRepositoryLink, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query_as!(
+        AssignmentRepositoryLink,
+        r#"
             INSERT INTO assignment_repositories (assignment_id, repository_id, student_id)
             VALUES ($1, $2, $3)
             ON CONFLICT (assignment_id, repository_id) 
             DO UPDATE SET student_id = EXCLUDED.student_id
             RETURNING assignment_id, repository_id, student_id, created_at
             "#,
-            assignment_id,
-            repository_id,
-            student_id
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
+        assignment_id,
+        repository_id,
+        student_id
+    )
+    .fetch_one(executor)
+    .await
+}
 
-    /// Fetch all students and their statuses for a specific assignment
-    pub async fn get_assignment_students(
-        &self,
-        assignment_id: Uuid,
-    ) -> Result<Vec<AssignmentStudent>, sqlx::Error> {
-        sqlx::query_as!(
-            AssignmentStudent,
-            r#"
+/// Fetch all students and their statuses for a specific assignment
+pub async fn get_assignment_students<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+) -> Result<Vec<AssignmentStudent>, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query_as!(
+        AssignmentStudent,
+        r#"
             SELECT 
                 id, assignment_id, student_id, 
                 status AS "status: AssignmentStudentStatus", 
@@ -239,9 +172,33 @@ impl AssignmentRepository {
             WHERE assignment_id = $1
             ORDER BY assigned_at DESC
             "#,
-            assignment_id
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
+        assignment_id
+    )
+    .fetch_all(executor)
+    .await
+}
+
+//No duplicate assignments can exist in a class so we query with class_id to act as a unique id.
+pub async fn get_assingment_id<'e, E>(
+    executor: E,
+    assignment_name: &str,
+    class_id: Uuid,
+) -> Result<Uuid, AssignmentError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    Ok(sqlx::query!(
+        r#"
+        SELECT id
+        FROM assignments
+        WHERE class_id = $1
+        AND title = $2
+        "#,
+        class_id,
+        assignment_name,
+    )
+    .fetch_optional(executor)
+    .await?
+    .ok_or(AssignmentError::DoesNotExist)?
+    .id)
 }

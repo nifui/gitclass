@@ -1,6 +1,8 @@
 use axum::{
+    Json,
     extract::FromRequestParts,
-    http::{header, request::Parts},
+    http::{StatusCode, header, request::Parts},
+    response::IntoResponse,
 };
 use axum_client_ip::ClientIp;
 use serde::{Deserialize, Serialize};
@@ -21,6 +23,44 @@ pub struct Claims {
     pub aud: String,
     //Session id.
     pub sid: Uuid,
+}
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RefreshRequest {
+    pub refresh_token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct SignupRequest {
+    pub email: String,
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct SignoutRequest {
+    //Require a refresh token as we want toe examine the session_id and log out of it.
+    pub refresh_token: String,
+    //We look at the jti of this if we do implement jti and put it into Redis if we do use Redis.
+    //The jti will live as long as the ttl of the jwt.
+    pub access_token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct SigninRequest {
+    pub identifier: String,
+    pub password: String,
+}
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct AuthResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+}
+pub type SigninResponse = AuthResponse;
+
+impl IntoResponse for AuthResponse {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
 }
 
 #[derive(Debug, Clone)]

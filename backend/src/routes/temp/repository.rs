@@ -4,7 +4,7 @@ use crate::routes::temp::models::ClientMeta;
 use crate::{errors::AuthError, map_sqlx_error};
 
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{Executor, Postgres};
 
 use sqlx::types::ipnetwork::IpNetwork;
 use std::str::FromStr;
@@ -25,55 +25,48 @@ pub enum SystemRole {
 pub struct RefreshTokenRecord {
     pub id: Uuid,
     pub session_id: Uuid,
-    pub expires_at: Option<OffsetDateTime>,
+    pub expires_at: OffsetDateTime,
     pub user_id: Uuid,
     pub revoked_at: Option<OffsetDateTime>,
 }
 
-#[derive(Clone)]
-pub struct AuthRepository {
-    pool: PgPool,
+pub async fn create_user<'e, E>(
+    executor: E,
+    email: String,
+    username: String,
+    password_hash: String,
+) -> Result<Uuid, AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO users
+            (email, username, password_hash)
+        VALUES
+            ($1, $2, $3)
+        RETURNING id
+        "#,
+        email,
+        username,
+        password_hash
+    )
+    .fetch_one(executor)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(id)
 }
-impl AuthRepository {
-    pub const fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
-
-    // -------------------------
-    // Users
-    // -------------------------
-
-    pub async fn create_user(
-        &self,
-        email: String,
-        username: String,
-        password_hash: String,
-    ) -> Result<Uuid, AuthError> {
-        let id = sqlx::query_scalar!(
-            r#"
-            INSERT INTO users
-                (email, username, password_hash)
-            VALUES
-                ($1, $2, $3)
-            RETURNING id
-            "#,
-            email,
-            username,
-            password_hash
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        Ok(id)
-    }
-    pub async fn find_user_by_identifier(
-        &self,
-        identifier: &str,
-    ) -> Result<Option<UserInfo>, AuthError> {
-        let user = sqlx::query_as!(
-            UserInfo,
-            r#"
+pub async fn find_user_by_identifier<'e, E>(
+    executor: E,
+    identifier: &str,
+) -> Result<Option<UserInfo>, AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let user = sqlx::query_as!(
+        UserInfo,
+        r#"
             SELECT
                 id, 
                 password_hash
@@ -81,43 +74,49 @@ impl AuthRepository {
             WHERE email = $1
                OR username = $1
             "#,
-            identifier
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(AuthError::Database)?;
+        identifier
+    )
+    .fetch_optional(executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-        Ok(user)
-    }
+    Ok(user)
+}
 
-    pub async fn get_user_role(&self, user_id: Uuid) -> Result<SystemRole, AuthError> {
-        let role = sqlx::query_scalar!(
-            r#"
+pub async fn get_user_role<'e, E>(executor: E, user_id: Uuid) -> Result<SystemRole, AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let role = sqlx::query_scalar!(
+        r#"
             SELECT system_role as "system_role: SystemRole"
             FROM users
             WHERE id = $1
             "#,
-            user_id
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(AuthError::Database)?
-        .ok_or(AuthError::InvalidCredentials)?;
+        user_id
+    )
+    .fetch_optional(executor)
+    .await
+    .map_err(AuthError::Database)?
+    .ok_or(AuthError::InvalidCredentials)?;
 
-        Ok(role)
-    }
+    Ok(role)
+}
 
-    // -------------------------
-    // Sessions
-    // -------------------------
+// -------------------------
+// Sessions
+// -------------------------
 
-    pub async fn create_session(
-        &self,
-        user_id: Uuid,
-        meta: &ClientMeta,
-    ) -> Result<Uuid, AuthError> {
-        let session_id = sqlx::query_scalar!(
-            r#"
+pub async fn create_session<'e, E>(
+    executor: E,
+    user_id: Uuid,
+    meta: &ClientMeta,
+) -> Result<Uuid, AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let session_id = sqlx::query_scalar!(
+        r#"
             INSERT INTO sessions
                 (
                     user_id,
@@ -129,27 +128,28 @@ impl AuthRepository {
                 ($1, $2, $3, $4)
             RETURNING id
             "#,
-            user_id,
-            meta.device_fingerprint,
-            IpNetwork::from_str(&meta.ip_address)?,
-            meta.user_agent
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
+        user_id,
+        meta.device_fingerprint,
+        IpNetwork::from_str(&meta.ip_address)?,
+        meta.user_agent
+    )
+    .fetch_one(executor)
+    .await
+    .map_err(map_sqlx_error)?;
 
-        Ok(session_id)
-    }
+    Ok(session_id)
+}
 
-    pub async fn find_session(
-        &self,
-        user_id: Uuid,
-        device_name: Option<String>,
-        ip: &str,
-        user_agent: String,
-    ) -> Result<Option<Uuid>, AuthError> {
-        let session = sqlx::query_scalar!(
-            r#"
+pub async fn find_session<'e, E>(
+    executor: E,
+    user_id: Uuid,
+    meta: &ClientMeta,
+) -> Result<Option<Uuid>, AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let session = sqlx::query_scalar!(
+        r#"
             SELECT id
             FROM sessions
             WHERE user_id = $1
@@ -157,76 +157,89 @@ impl AuthRepository {
               AND ip_address = $3
               AND user_agent = $4
             "#,
-            user_id,
-            device_name,
-            IpNetwork::from_str(ip)?,
-            user_agent
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(AuthError::Database)?;
+        user_id,
+        meta.device_fingerprint,
+        IpNetwork::from_str(&meta.ip_address)?,
+        meta.user_agent
+    )
+    .fetch_optional(executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-        Ok(session)
-    }
+    Ok(session)
+}
 
-    pub async fn revoke_session(&self, user_id: Uuid, session_id: Uuid) -> Result<(), AuthError> {
-        let mut tx = self.pool.begin().await.map_err(AuthError::Database)?;
-
-        let result = sqlx::query!(
-            r#"
+pub async fn revoke_session<E>(
+    executor: &mut E,
+    user_id: Uuid,
+    session_id: Uuid,
+) -> Result<(), AuthError>
+where
+    for<'c> &'c mut E: Executor<'c, Database = Postgres>,
+{
+    let result = sqlx::query!(
+        r#"
             UPDATE sessions
             SET revoked_at = NOW()
             WHERE id = $1
               AND user_id = $2
               AND revoked_at IS NULL
             "#,
-            session_id,
-            user_id
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(AuthError::Database)?;
+        session_id,
+        user_id
+    )
+    .execute(&mut *executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-        if result.rows_affected() == 0 {
-            return Err(AuthError::SessionRevoked);
-        }
+    if result.rows_affected() == 0 {
+        return Err(AuthError::SessionRevoked);
+    }
 
-        sqlx::query!(
-            r#"
+    sqlx::query!(
+        r#"
             DELETE FROM refresh_tokens
             WHERE session_id = $1
             "#,
-            session_id
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(AuthError::Database)?;
+        session_id
+    )
+    .execute(&mut *executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-        tx.commit().await.map_err(AuthError::Database)?;
+    Ok(())
+}
 
-        Ok(())
-    }
-
-    pub async fn revoke_all_sessions(&self, user_id: Uuid) -> Result<(), AuthError> {
-        sqlx::query!(
-            r#"
+pub async fn revoke_all_sessions<'e, E>(executor: E, user_id: Uuid) -> Result<(), AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(
+        r#"
             UPDATE sessions
             SET revoked_at = NOW()
             WHERE user_id = $1
               AND revoked_at IS NULL
             "#,
-            user_id
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(AuthError::Database)?;
+        user_id
+    )
+    .execute(executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-        Ok(())
-    }
+    Ok(())
+}
 
-    pub async fn session_exists(&self, user_id: Uuid, session_id: Uuid) -> Result<bool, AuthError> {
-        let exists = sqlx::query_scalar!(
-            r#"
+pub async fn session_exists<'e, E>(
+    executor: E,
+    user_id: Uuid,
+    session_id: Uuid,
+) -> Result<bool, AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let exists = sqlx::query_scalar!(
+        r#"
             SELECT EXISTS(
                 SELECT 1
                 FROM sessions
@@ -235,30 +248,33 @@ impl AuthRepository {
                   AND revoked_at IS NULL
             )
             "#,
-            session_id,
-            user_id
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(AuthError::Database)?
-        .unwrap_or(false);
+        session_id,
+        user_id
+    )
+    .fetch_one(executor)
+    .await
+    .map_err(AuthError::Database)?
+    .unwrap_or(false);
 
-        Ok(exists)
-    }
+    Ok(exists)
+}
 
-    // -------------------------
-    // Refresh Tokens
-    // -------------------------
+// -------------------------
+// Refresh Tokens
+// -------------------------
 
-    pub async fn store_refresh_token(
-        &self,
-        token_hash: String,
-        session_id: Uuid,
-    ) -> Result<(), AuthError> {
-        let expires_at = OffsetDateTime::now_utc() + time::Duration::days(7);
+pub async fn store_refresh_token<'e, E>(
+    executor: E,
+    token_hash: &str,
+    session_id: Uuid,
+) -> Result<(), AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let expires_at = OffsetDateTime::now_utc() + time::Duration::days(7);
 
-        sqlx::query!(
-            r#"
+    sqlx::query!(
+        r#"
             INSERT INTO refresh_tokens
                 (
                     token_hash,
@@ -268,24 +284,27 @@ impl AuthRepository {
             VALUES
                 ($1, $2, $3)
             "#,
-            token_hash,
-            session_id,
-            expires_at
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(AuthError::Database)?;
+        token_hash,
+        session_id,
+        expires_at
+    )
+    .execute(executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-        Ok(())
-    }
+    Ok(())
+}
 
-    pub async fn find_refresh_token(
-        &self,
-        token_hash: String,
-    ) -> Result<Option<RefreshTokenRecord>, AuthError> {
-        let record = sqlx::query_as!(
-            RefreshTokenRecord,
-            r#"
+pub async fn find_refresh_token<'e, E>(
+    executor: E,
+    token_hash: String,
+) -> Result<Option<RefreshTokenRecord>, AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let record = sqlx::query_as!(
+        RefreshTokenRecord,
+        r#"
             SELECT
                 rt.id,
                 rt.session_id,
@@ -297,81 +316,85 @@ impl AuthRepository {
                 ON rt.session_id = s.id
             WHERE rt.token_hash = $1
             "#,
-            token_hash
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(AuthError::Database)?;
+        token_hash
+    )
+    .fetch_optional(executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-        Ok(record)
-    }
+    Ok(record)
+}
 
-    pub async fn delete_refresh_token(&self, id: Uuid) -> Result<(), AuthError> {
-        sqlx::query!(
-            r#"
+pub async fn delete_refresh_token<'e, E>(executor: E, id: Uuid) -> Result<(), AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(
+        r#"
             DELETE FROM refresh_tokens
             WHERE id = $1
             "#,
-            id
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(AuthError::Database)?;
+        id
+    )
+    .execute(executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-        Ok(())
-    }
+    Ok(())
+}
 
-    // -------------------------
-    // Admin PIN
-    // -------------------------
+// -------------------------
+// Admin PIN
+// -------------------------
 
-    pub async fn get_active_admin_pin(&self) -> Result<Option<String>, AuthError> {
-        let hash = sqlx::query_scalar!(
-            r#"
+pub async fn get_active_admin_pin<'e, E>(executor: E) -> Result<Option<String>, AuthError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let hash = sqlx::query_scalar!(
+        r#"
             SELECT code_hash
             FROM pincode
             WHERE expires_at > $1
             "#,
-            OffsetDateTime::now_utc()
-        )
-        .fetch_optional(&self.pool)
+        OffsetDateTime::now_utc()
+    )
+    .fetch_optional(executor)
+    .await
+    .map_err(AuthError::Database)?;
+
+    Ok(hash)
+}
+
+pub async fn replace_admin_pin<E>(
+    executor: &mut E,
+    hash: String,
+    expires_at: OffsetDateTime,
+) -> Result<(), AuthError>
+where
+    for<'c> &'c mut E: Executor<'c, Database = Postgres>,
+{
+    sqlx::query!("TRUNCATE pincode")
+        .execute(&mut *executor)
         .await
         .map_err(AuthError::Database)?;
 
-        Ok(hash)
-    }
+    sqlx::query!(
+        r#"
+        INSERT INTO pincode
+            (
+                code_hash,
+                expires_at
+            )
+        VALUES
+            ($1, $2)
+        "#,
+        hash,
+        expires_at
+    )
+    .execute(&mut *executor)
+    .await
+    .map_err(AuthError::Database)?;
 
-    pub async fn replace_admin_pin(
-        &self,
-        hash: String,
-        expires_at: OffsetDateTime,
-    ) -> Result<(), AuthError> {
-        let mut tx = self.pool.begin().await.map_err(AuthError::Database)?;
-
-        sqlx::query!("TRUNCATE pincode")
-            .execute(&mut *tx)
-            .await
-            .map_err(AuthError::Database)?;
-
-        sqlx::query!(
-            r#"
-            INSERT INTO pincode
-                (
-                    code_hash,
-                    expires_at
-                )
-            VALUES
-                ($1, $2)
-            "#,
-            hash,
-            expires_at
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(AuthError::Database)?;
-
-        tx.commit().await.map_err(AuthError::Database)?;
-
-        Ok(())
-    }
+    Ok(())
 }

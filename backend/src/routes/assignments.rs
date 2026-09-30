@@ -108,7 +108,8 @@ pub struct AssociateRequest {
     repository_link: String,
     assignment_title: String,
 }
-
+//Links an external repository to an assignment.
+// This is for turning in assignments, and is automatically done when the user starts an assignment
 pub async fn associate_repository(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
@@ -161,6 +162,8 @@ pub async fn associate_repository(
 
     Ok(())
 }
+//Sets a template for an assignment.
+pub fn set_template() {}
 pub async fn destroy_assignment() {}
 pub async fn create_workflow() {}
 

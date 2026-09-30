@@ -1,13 +1,14 @@
-
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TYPE system_role AS ENUM (
     'USER',
+    'STAFF',
     'ADMIN'
 );
 
 CREATE TYPE class_member_role AS ENUM (
     'TEACHER',
+    'ASSISTANT', 
     'STUDENT'
 );
 

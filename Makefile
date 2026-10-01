@@ -4,7 +4,7 @@ dev:
 	cargo run --release
 
 up:
-	docker compose up -d
+	docker compose up -d 
 
 down:
 	docker compose down
@@ -21,4 +21,6 @@ clean:
 migrate: 
 	cd backend && sqlx migrate run
 
-reset: clean up migrate
+reset: clean
+	docker compose up -d --wait
+	cd backend && sqlx migrate run

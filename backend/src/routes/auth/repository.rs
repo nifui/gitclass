@@ -1,6 +1,7 @@
 // auth_repository.rs
 
 use crate::routes::auth::models::ClientMeta;
+use crate::routes::classes::models::ClassRole;
 use crate::{errors::AuthError, map_sqlx_error};
 
 use serde::{Deserialize, Serialize};
@@ -14,12 +15,6 @@ use uuid::Uuid;
 pub struct UserInfo {
     pub id: Uuid,
     pub password_hash: String,
-}
-#[derive(Eq, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "system_role", rename_all = "UPPERCASE")]
-pub enum SystemRole {
-    User,
-    Admin,
 }
 
 pub struct RefreshTokenRecord {
@@ -102,7 +97,6 @@ where
 
     Ok(role)
 }
-
 // -------------------------
 // Sessions
 // -------------------------

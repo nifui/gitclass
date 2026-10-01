@@ -13,17 +13,17 @@ where
     sqlx::query_as!(
         Assignment,
         r#"
-            INSERT INTO assignments (
-                class_id, title, description, instructions, 
-                assigned_at, due_at, total_points, created_by
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING 
-                id, class_id, title, description, instructions, 
-                assigned_at, due_at, total_points, 
-                status AS "status: AssignmentStatus", 
-                created_by, created_at, updated_at
-            "#,
+        INSERT INTO assignments (
+            class_id, title, description, instructions, 
+            assigned_at, due_at, total_points, created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING 
+            id, class_id, title, description, instructions, 
+            assigned_at, due_at, total_points, 
+            status AS "status: AssignmentStatus", 
+            created_by, created_at, updated_at
+        "#,
         payload.class_id,
         payload.title,
         payload.description,

@@ -8,6 +8,12 @@ use axum_client_ip::ClientIp;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+#[derive(Eq, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "system_role", rename_all = "UPPERCASE")]
+pub enum SystemRole {
+    User,
+    Admin,
+}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Claims {
@@ -24,6 +30,7 @@ pub struct Claims {
     //Session id.
     pub sid: Uuid,
 }
+
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RefreshRequest {
     pub refresh_token: String,

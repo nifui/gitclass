@@ -24,6 +24,15 @@ pub enum AssignmentStudentStatus {
 
 // --- Models ---
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateAssignment {
+    pub class_id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub instructions: Option<String>,
+    pub due_at: OffsetDateTime,
+    pub total_points: i32,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Assignment {
     pub id: Uuid,
@@ -68,8 +77,8 @@ pub struct CreateAssignmentPayload {
     pub title: String,
     pub description: Option<String>,
     pub instructions: Option<String>,
-    pub assigned_at: Option<OffsetDateTime>,
-    pub due_at: Option<OffsetDateTime>,
+    pub assigned_at: OffsetDateTime,
+    pub due_at: OffsetDateTime,
     pub total_points: i32,
     pub created_by: Uuid,
 }

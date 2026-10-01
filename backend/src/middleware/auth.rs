@@ -8,7 +8,10 @@ use axum::{
 use crate::{
     AppState,
     errors::{ApiError, AuthError},
-    routes::auth::{models::Claims, repository::SystemRole, services::auth_required},
+    routes::auth::{
+        models::{Claims, SystemRole},
+        services::auth_required,
+    },
 };
 
 pub struct AuthUser(pub Claims);

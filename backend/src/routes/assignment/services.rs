@@ -1,5 +1,3 @@
-use std::ops::RangeBounds;
-
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::OffsetDateTime;
@@ -7,13 +5,42 @@ use uuid::Uuid;
 
 use crate::routes::{
     assignment::{
-        AssignmentError, models::{AssignmentRepositoryLink, AssignmentStudent, CreateAssignmentPayload}, repository::{self, get_assignment_students, get_assingment_id},
-    }, auth::repository,
+        AssignmentError,
+        models::{
+            Assignment, AssignmentRepositoryLink, AssignmentStudent, CreateAssignment,
+            CreateAssignmentPayload,
+        },
+        repository::{self, get_assignment_students, get_assingment_id},
+    },
+    auth::{models::SystemRole, repository::get_user_role},
 };
-// The typing of the payload is funky. Will change later.
-pub async fn create_assignment(pool: PgPool, class_id: Uuid, title: String, description: Option<String>, instructions: Option<String>) {
-    let payload = CreateAssignmentPayload { class_id, title, description, instructions, assigned_at: OffsetDateTime::now_utc(), due_at: (), total_points: (), created_by: () }
-    repository::create_assignment(pool, payload).await
+//Convert to a payload.
+pub async fn create_assignment(
+    pool: &PgPool,
+    parameters: CreateAssignment,
+    user_id: Uuid,
+) -> Result<Assignment, AssignmentError> {
+    //Check if the operation can be performed.
+    let user_role = get_user_role(pool, user_id)
+        .await
+        .map_err(|_| AssignmentError::Database)?;
+    if user_role != SystemRole::Admin {
+        return Err(AssignmentError::Unauthorized);
+    }
+
+    let payload = CreateAssignmentPayload {
+        class_id: parameters.class_id,
+        title: parameters.title,
+        description: parameters.description,
+        instructions: parameters.instructions,
+        assigned_at: OffsetDateTime::now_utc(),
+        due_at: parameters.due_at,
+        total_points: parameters.total_points,
+        created_by: user_id,
+    };
+    repository::create_assignment(pool, payload)
+        .await
+        .map_err(|_| AssignmentError::Database)
 }
 pub async fn delete_assignment() {}
 

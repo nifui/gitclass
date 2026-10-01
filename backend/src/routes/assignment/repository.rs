@@ -179,7 +179,7 @@ where
 }
 
 //No duplicate assignments can exist in a class so we query with class_id to act as a unique id.
-pub async fn get_assingment_id<'e, E>(
+pub async fn get_assignment_id<'e, E>(
     executor: E,
     assignment_name: &str,
     class_id: Uuid,

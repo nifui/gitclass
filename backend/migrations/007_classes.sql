@@ -2,6 +2,7 @@ CREATE TABLE classes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     course_code TEXT,
+    status class_status NOT NULL, 
     term TEXT,
     organization_id UUID
         REFERENCES external_organizations(id) ON DELETE SET NULL,

@@ -101,6 +101,7 @@ async fn main() {
         (status = 200, description = "Service is healthy")
     )
 )]
+
 async fn health() -> &'static str {
     "OK"
 }

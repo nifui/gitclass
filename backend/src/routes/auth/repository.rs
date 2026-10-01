@@ -1,10 +1,8 @@
 // auth_repository.rs
 
-use crate::routes::auth::models::ClientMeta;
-use crate::routes::classes::models::ClassRole;
+use crate::routes::auth::models::{ClientMeta, SystemRole};
 use crate::{errors::AuthError, map_sqlx_error};
 
-use serde::{Deserialize, Serialize};
 use sqlx::{Executor, Postgres};
 
 use sqlx::types::ipnetwork::IpNetwork;

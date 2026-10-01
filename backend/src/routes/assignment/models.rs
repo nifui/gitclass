@@ -22,8 +22,6 @@ pub enum AssignmentStudentStatus {
     Exempt,
 }
 
-// --- Models ---
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateAssignment {
     pub class_id: Uuid,

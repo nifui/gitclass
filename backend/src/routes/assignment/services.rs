@@ -10,7 +10,7 @@ use crate::routes::{
             Assignment, AssignmentRepositoryLink, AssignmentStudent, CreateAssignment,
             CreateAssignmentPayload,
         },
-        repository::{self, get_assignment_students, get_assingment_id},
+        repository::{self, get_assignment_id, get_assignment_students},
     },
     auth::{models::SystemRole, repository::get_user_role},
 };
@@ -50,7 +50,7 @@ pub async fn assignment_student_info(
     class_id: Uuid,
     assignment_name: String,
 ) -> Result<Vec<AssignmentStudent>, AssignmentError> {
-    let assignment_id = get_assingment_id(&pool, &assignment_name, class_id).await?;
+    let assignment_id = get_assignment_id(&pool, &assignment_name, class_id).await?;
     Ok(get_assignment_students(&pool, assignment_id).await?)
 }
 
@@ -69,6 +69,7 @@ pub async fn link_repsitory(
         .await
         .map_err(|_| AssignmentError::Database)
 }
+
 pub struct ClassFilter {}
 //Same idea as below but a diff scope.
 pub async fn assign_to_class() {}

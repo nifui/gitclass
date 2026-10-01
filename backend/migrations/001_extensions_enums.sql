@@ -106,3 +106,8 @@ CREATE TYPE log_stream AS ENUM (
     'STDOUT',
     'STDERR'
 );
+
+CREATE TYPE class_status as ENUM (
+   'ARCHIVED',
+   'OPEN'
+);

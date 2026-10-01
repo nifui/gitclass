@@ -20,16 +20,19 @@ pub enum AssignmentError {
     #[error("Not enough permission")]
     Unauthorized,
 }
+
 impl From<sqlx::Error> for AssignmentError {
     fn from(_: sqlx::Error) -> Self {
         Self::Database
     }
 }
+
 impl IntoResponse for AssignmentError {
     fn into_response(self) -> axum::response::Response {
         (StatusCode::OK, Json("a")).into_response()
     }
 }
+
 impl From<AssignmentError> for ApiError {
     fn from(_: AssignmentError) -> Self {
         Self::Internal

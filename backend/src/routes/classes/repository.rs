@@ -31,7 +31,6 @@ where
         INNER JOIN class_members AS cm
             ON cm.class_id = c.id
         WHERE cm.user_id = $1
-          AND cm.left_at IS NULL
         ORDER BY c.created_at DESC
         "#,
         user_id
@@ -54,7 +53,6 @@ pub async fn get_class_role(
         FROM class_members AS cm
         WHERE cm.class_id = $1
           AND cm.user_id = $2
-          AND cm.left_at IS NULL
         "#,
         class_id,
         user_id,
@@ -173,7 +171,6 @@ pub async fn get_members(pool: &PgPool, class_id: Uuid) -> Result<Vec<ClassMembe
             joined_at
         FROM class_members
         WHERE class_id = $1
-          AND left_at IS NULL
         ORDER BY joined_at
         "#,
         class_id,

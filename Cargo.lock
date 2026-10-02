@@ -203,6 +203,7 @@ dependencies = [
  "axum-client-ip",
  "axum-extra",
  "base64 0.23.1",
+ "bitflags",
  "dotenvy",
  "hex",
  "ipnetwork",

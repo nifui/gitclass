@@ -1,8 +1,9 @@
 use thiserror::Error;
 
+pub mod controller;
 pub mod models;
 pub mod repository;
-
+pub mod services;
 #[derive(Debug, Error)]
 pub enum ClassError {
     #[error("placeholder")]

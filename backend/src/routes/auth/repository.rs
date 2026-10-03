@@ -22,7 +22,8 @@ pub struct RefreshTokenRecord {
     pub user_id: Uuid,
     pub revoked_at: Option<OffsetDateTime>,
 }
-
+//Convert these to sqlx::Error instead of AuthError to make it more flexible when using the '?'
+//operator
 pub async fn create_user<'e, E>(
     executor: E,
     email: String,

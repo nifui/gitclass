@@ -64,7 +64,7 @@ pub async fn get_class_role(
     Ok(role)
 }
 /// Creates a class.
-pub async fn create_class(pool: &PgPool, input: CreateClass) -> Result<Class, ClassError> {
+pub async fn create_class(pool: &PgPool, input: &CreateClass) -> Result<Class, ClassError> {
     let class = sqlx::query_as!(
         Class,
         r#"

@@ -11,6 +11,17 @@ use axum::{Json, extract::State};
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
+pub fn router() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::new()
+        .routes(routes!(signup))
+        .routes(routes!(signin))
+        .routes(routes!(refresh))
+        .routes(routes!(signout))
+        .routes(routes!(revoke_session))
+        .routes(routes!(admin_auth))
+        .routes(routes!(revoke_all_sessions))
+}
+
 #[utoipa::path(
     post,
     path = "/auth/signup",
@@ -159,13 +170,4 @@ pub async fn revoke_all_sessions(
     Ok(())
 }
 
-pub fn router() -> OpenApiRouter<Arc<AppState>> {
-    OpenApiRouter::new()
-        .routes(routes!(signup))
-        .routes(routes!(signin))
-        .routes(routes!(refresh))
-        .routes(routes!(signout))
-        .routes(routes!(revoke_session))
-        .routes(routes!(admin_auth))
-        .routes(routes!(revoke_all_sessions))
-}
+

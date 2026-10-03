@@ -1,6 +1,6 @@
 use backend::{
     AppState,
-    routes::{assignment, auth},
+    routes::{assignment, auth, classes},
 };
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
@@ -30,7 +30,8 @@ pub fn jwt_secret() -> &'static [u8] {
         description = "Backend HTTP API"
     ),
     tags(
-        (name = "users", description = "User endpoints")
+        (name = "Users", description = "User endpoints"),
+        (name = "Classes", description = "Class endpoints")
     )
 )]
 struct ApiDoc;
@@ -38,14 +39,13 @@ struct ApiDoc;
 pub fn router() -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::with_openapi(ApiDoc::openapi())
 }
-
 #[tokio::main]
 async fn main() {
     dotenv().ok();
 
     let serve_address = std::env::var("SERVE_ADDRESS").expect("SERVE_ADDRESS must be set.");
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set.");
-    let valkey_url = std::env::var("VALKEY_URL").expect("VAKEY_URL must be set.");
+    let valkey_url = std::env::var("VALKEY_URL").expect("VALKEY_URL must be set.");
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
@@ -68,6 +68,7 @@ async fn main() {
         .routes(routes!(health))
         .merge(auth::router())
         .merge(assignment::router())
+        .merge(classes::router())
         .with_state(state)
         .split_for_parts();
 

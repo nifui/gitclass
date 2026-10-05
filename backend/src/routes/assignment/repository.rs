@@ -36,7 +36,22 @@ where
     .fetch_one(executor)
     .await
 }
-
+//This should definitely inspect PgQueryResult
+pub async fn delete_assingment<'e, E>(executor: E, assignment_id: Uuid) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(
+        r#"
+        DELETE FROM assignments 
+        WHERE id = $1
+        "#,
+        assignment_id
+    )
+    .execute(executor)
+    .await
+    .map(|_| ())
+}
 /// Fetch a single assignment by ID
 pub async fn get_assignment<'e, E>(
     executor: E,
@@ -48,14 +63,14 @@ where
     sqlx::query_as!(
         Assignment,
         r#"
-            SELECT 
-                id, class_id, title, description, instructions, 
-                assigned_at, due_at, total_points, 
-                status AS "status: AssignmentStatus", 
-                created_by, created_at, updated_at
-            FROM assignments
-            WHERE id = $1
-            "#,
+        SELECT 
+            id, class_id, title, description, instructions, 
+            assigned_at, due_at, total_points, 
+            status AS "status: AssignmentStatus", 
+            created_by, created_at, updated_at
+        FROM assignments
+        WHERE id = $1
+        "#,
         assignment_id
     )
     .fetch_optional(executor)
@@ -101,29 +116,29 @@ where
 {
     let now = time::OffsetDateTime::now_utc();
     sqlx::query_as!(
-            AssignmentStudent,
-            r#"
-            UPDATE assignment_students
-            SET 
-                status = $1::assignment_student_status,
-                updated_at = $2,
-                started_at = COALESCE(started_at, CASE WHEN $1::text = 'STARTED' THEN $2::timestamptz ELSE NULL END),
-                submitted_at = COALESCE(submitted_at, CASE WHEN $1::text = 'SUBMITTED' THEN $2::timestamptz ELSE NULL END),
-                graded_at = COALESCE(graded_at, CASE WHEN $1::text = 'GRADED' THEN $2::timestamptz ELSE NULL END)
-            WHERE assignment_id = $3 AND student_id = $4
-            RETURNING 
-                id, assignment_id, student_id, 
-                status AS "status: AssignmentStudentStatus", 
-                assigned_at, started_at, submitted_at, graded_at, 
-                created_at, updated_at
-            "#,
-            new_status as AssignmentStudentStatus,
-            now,
-            assignment_id,
-            student_id
-        )
-        .fetch_one(executor)
-        .await
+        AssignmentStudent,
+        r#"
+        UPDATE assignment_students
+        SET 
+            status = $1::assignment_student_status,
+            updated_at = $2,
+            started_at = COALESCE(started_at, CASE WHEN $1::text = 'STARTED' THEN $2::timestamptz ELSE NULL END),
+            submitted_at = COALESCE(submitted_at, CASE WHEN $1::text = 'SUBMITTED' THEN $2::timestamptz ELSE NULL END),
+            graded_at = COALESCE(graded_at, CASE WHEN $1::text = 'GRADED' THEN $2::timestamptz ELSE NULL END)
+        WHERE assignment_id = $3 AND student_id = $4
+        RETURNING 
+            id, assignment_id, student_id, 
+            status AS "status: AssignmentStudentStatus", 
+            assigned_at, started_at, submitted_at, graded_at, 
+            created_at, updated_at
+        "#,
+        new_status as AssignmentStudentStatus,
+        now,
+        assignment_id,
+        student_id
+    )
+    .fetch_one(executor)
+    .await
 }
 /// Link a repository to an assignment (and optionally to a student)
 pub async fn link_repository<'e, E>(
@@ -138,12 +153,12 @@ where
     sqlx::query_as!(
         AssignmentRepositoryLink,
         r#"
-            INSERT INTO assignment_repositories (assignment_id, repository_id, student_id)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (assignment_id, repository_id) 
-            DO UPDATE SET student_id = EXCLUDED.student_id
-            RETURNING assignment_id, repository_id, student_id, created_at
-            "#,
+        INSERT INTO assignment_repositories (assignment_id, repository_id, student_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (assignment_id, repository_id) 
+        DO UPDATE SET student_id = EXCLUDED.student_id
+        RETURNING assignment_id, repository_id, student_id, created_at
+        "#,
         assignment_id,
         repository_id,
         student_id
@@ -163,15 +178,15 @@ where
     sqlx::query_as!(
         AssignmentStudent,
         r#"
-            SELECT 
-                id, assignment_id, student_id, 
-                status AS "status: AssignmentStudentStatus", 
-                assigned_at, started_at, submitted_at, graded_at, 
-                created_at, updated_at
-            FROM assignment_students
-            WHERE assignment_id = $1
-            ORDER BY assigned_at DESC
-            "#,
+        SELECT 
+            id, assignment_id, student_id, 
+            status AS "status: AssignmentStudentStatus", 
+            assigned_at, started_at, submitted_at, graded_at, 
+            created_at, updated_at
+        FROM assignment_students
+        WHERE assignment_id = $1
+        ORDER BY assigned_at DESC
+        "#,
         assignment_id
     )
     .fetch_all(executor)

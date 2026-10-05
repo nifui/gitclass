@@ -46,7 +46,7 @@ pub async fn get_class_role(
     pool: &PgPool,
     user_id: Uuid,
     class_id: Uuid,
-) -> Result<ClassRole, ClassError> {
+) -> Result<ClassRole, sqlx::Error> {
     let role = sqlx::query!(
         r#"
         SELECT cm.role as "class_member_role: ClassRole"

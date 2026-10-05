@@ -1,9 +1,25 @@
 use axum::{Json, response::IntoResponse};
+use bitflags::bitflags;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Permissions: u32 {
+        const VIEW_ASSIGNMENTS   = 1 << 0;
+        const CREATE_ASSIGNMENTS = 1 << 1;
+        const EDIT_ASSIGNMENTS   = 1 << 2;
+        const DELETE_ASSIGNMENTS = 1 << 3;
+        const GRADE_ASSIGNMENTS  = 1 << 4;
+        const SUBMIT_ASSIGNMENT = 1 << 5;
+
+        //Broadly admin capabilities.
+        const MANAGE_CLASS       = 1 << 8;
+    }
+}
 
 #[derive(ToSchema, Eq, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "class_member_role", rename_all = "UPPERCASE")]
@@ -15,6 +31,30 @@ pub enum ClassRole {
 impl IntoResponse for ClassRole {
     fn into_response(self) -> axum::response::Response {
         Json(self).into_response()
+    }
+}
+
+impl ClassRole {
+    pub fn permissions(self) -> Permissions {
+        match self {
+            Self::Teacher => {
+                Permissions::VIEW_ASSIGNMENTS
+                    | Permissions::CREATE_ASSIGNMENTS
+                    | Permissions::EDIT_ASSIGNMENTS
+                    | Permissions::DELETE_ASSIGNMENTS
+                    | Permissions::GRADE_ASSIGNMENTS
+                    | Permissions::MANAGE_CLASS
+            }
+
+            Self::Assistant => {
+                Permissions::VIEW_ASSIGNMENTS
+                    | Permissions::CREATE_ASSIGNMENTS
+                    | Permissions::EDIT_ASSIGNMENTS
+                    | Permissions::GRADE_ASSIGNMENTS
+            }
+
+            Self::Student => Permissions::VIEW_ASSIGNMENTS | Permissions::SUBMIT_ASSIGNMENT,
+        }
     }
 }
 #[derive(Eq, PartialEq, Debug, Serialize, Deserialize, sqlx::Type, ToSchema)]

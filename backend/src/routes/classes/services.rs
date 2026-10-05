@@ -7,7 +7,7 @@ use crate::routes::{
     auth::{models::SystemRole, repository::get_user_role},
     classes::{
         ClassError,
-        models::{ClassRole, CreateClass},
+        models::{CreateClass, Permissions},
         repository::{self, get_class_role, set_course_code},
     },
     external::organizations::organization_exists,
@@ -18,22 +18,23 @@ pub fn generate_code(n: usize) -> String {
     Alphanumeric.sample_string(&mut rand::rng(), n)
 }
 
-bitflags! {
-    pub struct Permissions: u8 {}
-}
-//Replace with something more generic like has permission or something.
-//helps when adding other roles with less permissions than a teacher or something.
-pub async fn permissions(pool: &PgPool, user_id: Uuid, class_id: Uuid) -> Result<bool, ClassError> {
+pub async fn get_permissions(
+    pool: &PgPool,
+    user_id: Uuid,
+    class_id: Uuid,
+) -> Result<Permissions, sqlx::Error> {
     let role = get_class_role(pool, user_id, class_id).await?;
-    Ok(role == ClassRole::Teacher || role == ClassRole::Assistant)
+    Ok(role.permissions())
 }
-
 pub async fn generate_class_code(
     pool: &PgPool,
     user_id: Uuid,
     class_id: Uuid,
 ) -> Result<(), ClassError> {
-    if !permissions(pool, user_id, class_id).await? {
+    if !get_permissions(pool, user_id, class_id)
+        .await?
+        .contains(Permissions::MANAGE_CLASS)
+    {
         return Err(ClassError::Placeholder);
     }
     set_course_code(pool, generate_code(CODE_SIZE), class_id).await?;

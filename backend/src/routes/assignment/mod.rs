@@ -3,10 +3,10 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::errors::ApiError;
-
 pub mod controller;
 pub mod models;
 pub mod repository;
+pub mod rubric;
 pub mod services;
 pub use controller::router;
 #[derive(Debug, Clone, Deserialize, Error)]
@@ -19,6 +19,8 @@ pub enum AssignmentError {
     DoesNotExist,
     #[error("Not enough permission")]
     Unauthorized,
+    #[error("Resource was not found with the provided parameters")]
+    NotFound,
 }
 
 impl From<sqlx::Error> for AssignmentError {

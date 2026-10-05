@@ -12,7 +12,14 @@ use crate::routes::{
         },
         repository::{self, get_assignment_id, get_assignment_students},
     },
-    auth::{models::SystemRole, repository::get_user_role},
+    auth::{
+        models::SystemRole,
+        repository::{self, get_user_role},
+    },
+    classes::{
+        models::Permissions,
+        services::{get_permissions, permissions},
+    },
 };
 //Convert to a payload.
 pub async fn create_assignment(
@@ -42,8 +49,55 @@ pub async fn create_assignment(
         .await
         .map_err(|_| AssignmentError::Database)
 }
-pub async fn delete_assignment() {}
 
+pub async fn get_assignment(
+    pool: &PgPool,
+    user_id: Uuid,
+    class_id: Uuid,
+    assignment_id: Uuid,
+) -> Result<Assignment, AssignmentError> {
+    //Check if the user has access to the class in which the assignment exists.
+    if !get_permissions(pool, user_id, class_id)
+        .await?
+        .contains(Permissions::VIEW_ASSIGNMENTS)
+    {
+        return Err(AssignmentError::Unauthorized);
+    }
+    repository::get_assignment(pool, assignment_id)
+        .await?
+        .ok_or(AssignmentError::DoesNotExist)
+}
+
+pub async fn delete_assignment(
+    pool: &PgPool,
+    user_id: Uuid,
+    class_id: Uuid,
+    assignment_id: Uuid,
+) -> Result<(), AssignmentError> {
+    if !get_permissions(pool, user_id, class_id)
+        .await?
+        .contains(Permissions::DELETE_ASSIGNMENTS)
+    {
+        return Err(AssignmentError::Unauthorized);
+    }
+    Ok(repository::delete_assingment(pool, assignment_id).await?)
+}
+//Assign an assignment to a student.
+pub async fn assign_student(
+    pool: &PgPool,
+    user_id: Uuid,
+    class_id: Uuid,
+    assignment_id: Uuid,
+    student_id: Uuid,
+) -> Result<AssignmentStudent, AssignmentError> {
+    if !get_permissions(pool, user_id, class_id)
+        .await?
+        .contains(Permissions::CREATE_ASSIGNMENTS)
+    {
+        return Err(AssignmentError::Unauthorized);
+    }
+    Ok(repository::assign_student(pool, assignment_id, student_id).await?)
+}
 //Returns info on the assignments and students associated with them.
 pub async fn assignment_student_info(
     pool: PgPool,
@@ -52,6 +106,14 @@ pub async fn assignment_student_info(
 ) -> Result<Vec<AssignmentStudent>, AssignmentError> {
     let assignment_id = get_assignment_id(&pool, &assignment_name, class_id).await?;
     Ok(get_assignment_students(&pool, assignment_id).await?)
+}
+
+pub async fn submit_assignment(
+    pool: &PgPool,
+    class_id: Uuid,
+    assignment_id: Uuid,
+    student_id: Uuid,
+) -> Result<(), AssignmentError> {
 }
 
 // This does not perform any sort of check of whether the repository matches the template set by the
@@ -74,28 +136,37 @@ pub struct ClassFilter {}
 //Same idea as below but a diff scope.
 pub async fn assign_to_class() {}
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Range<T> {
-    pub upper: T,
     pub lower: T,
+    pub upper: T,
 }
-//Rust has this somewhat but not as an enum.
-#[derive(Eq, Debug, Serialize, Deserialize, PartialEq)]
-pub enum Condition<T>
-where
-    T: Eq + PartialEq,
-{
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub enum Condition<T> {
     Range(Range<T>),
     EqualTo(T),
     LessThan(T),
     GreaterThan(T),
 }
-//The Eq restricts the types to disclude floating types.
-pub struct StudentFilter<T>
-where
-    T: Eq + PartialEq,
-{
-    pub grade_range: Condition<T>,
+impl<T: PartialOrd> Condition<T> {
+    pub fn matches(&self, value: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        match self {
+            Self::Range(range) => value >= &range.lower && value <= &range.upper,
+            Self::EqualTo(expected) => value == expected,
+            Self::LessThan(bound) => value < bound,
+            Self::GreaterThan(bound) => value > bound,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct StudentFilter {
+    pub grade: Option<Condition<i32>>,
+    pub name: Option<Condition<String>>,
 }
 
 //Add a filter option via queries to allow teacher to set students who should recieve the

@@ -37,11 +37,11 @@ where
     .await
 }
 //This should definitely inspect PgQueryResult
-pub async fn delete_assingment<'e, E>(executor: E, assignment_id: Uuid) -> Result<(), sqlx::Error>
+pub async fn delete_assignment<'e, E>(executor: E, assignment_id: Uuid) -> Result<bool, sqlx::Error>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"
         DELETE FROM assignments 
         WHERE id = $1
@@ -49,8 +49,9 @@ where
         assignment_id
     )
     .execute(executor)
-    .await
-    .map(|_| ())
+    .await?;
+
+    Ok(result.rows_affected() > 0)
 }
 /// Fetch a single assignment by ID
 pub async fn get_assignment<'e, E>(
@@ -216,4 +217,13 @@ where
     .await?
     .ok_or(AssignmentError::DoesNotExist)?
     .id)
+}
+pub async fn assign_to_class<'e, E>(
+    executor: E,
+    assignment_name: &str,
+    class_id: Uuid,
+) -> Result<Uuid, AssignmentError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
 }

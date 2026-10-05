@@ -198,3 +198,16 @@ pub async fn set_course_code(
     .await?;
     Ok(())
 }
+
+pub async fn student_count(pool: &PgPool, class_id: Uuid) -> Result<usize, ClassError> {
+    let type: i64 = sqlx::query_scalar!(
+        r#"
+    SELECT COUNT(*)
+    FROM classes 
+    WHERE id = $1
+    "#,
+        class_id
+    )
+    .fetch_one(pool)
+    .await;
+}

@@ -1,4 +1,3 @@
-use bitflags::bitflags;
 use rand::distr::{Alphanumeric, SampleString};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -12,12 +11,14 @@ use crate::routes::{
     },
     external::organizations::organization_exists,
 };
-
+//Move this to a config file. Much more convenient than having to dig through the code to modify
+//such a trivial number. Use a static OnceLock for this later.
 const CODE_SIZE: usize = 6;
 pub fn generate_code(n: usize) -> String {
     Alphanumeric.sample_string(&mut rand::rng(), n)
 }
-
+//This technically handles permission checking and membership checking in one function as to have a
+//role you must be part of the class.
 pub async fn get_permissions(
     pool: &PgPool,
     user_id: Uuid,

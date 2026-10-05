@@ -75,3 +75,11 @@ those templates that were provided.
 The CSR model does improve readability but it makes it harder to identify when database queries can
 be fused for better efficiency. As a result I think when a majority of the features are implemented,
 the next priority should be to examine the queries and see if they can be optmized.
+
+
+## Auth model 
+
+On the controller level it should handle broad level authentication such as verifying a valid user session or admin perms. 
+On the service level it handles more coarse domain specific authentication like TEACHER or STUDENT. 
+This helps prevent needlessly cluttering the controller. 
+Documentation is already a pain in the ass when looking at the code so less clutter = better. 

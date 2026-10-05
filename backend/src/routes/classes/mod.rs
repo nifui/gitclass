@@ -1,6 +1,5 @@
 use axum::{http::StatusCode, response::IntoResponse};
 use thiserror::Error;
-use utoipa::IntoResponses;
 
 pub mod controller;
 pub mod models;

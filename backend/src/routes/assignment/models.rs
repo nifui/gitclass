@@ -80,3 +80,9 @@ pub struct CreateAssignmentPayload {
     pub total_points: i32,
     pub created_by: Uuid,
 }
+#[derive(Deserialize, Debug, Clone)]
+pub struct AssignAssignmentRequest {
+    pub student_id: Uuid,
+    pub assignment_id: Uuid,
+    pub class_id: Uuid,
+}

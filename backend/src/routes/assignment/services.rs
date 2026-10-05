@@ -12,22 +12,15 @@ use crate::routes::{
         },
         repository::{self, get_assignment_id, get_assignment_students},
     },
-    auth::{
-        models::SystemRole,
-        repository::{self, get_user_role},
-    },
-    classes::{
-        models::Permissions,
-        services::{get_permissions, permissions},
-    },
+    auth::{models::SystemRole, repository::get_user_role},
+    classes::{models::Permissions, services::get_permissions},
 };
-//Convert to a payload.
+
 pub async fn create_assignment(
     pool: &PgPool,
     parameters: CreateAssignment,
     user_id: Uuid,
 ) -> Result<Assignment, AssignmentError> {
-    //Check if the operation can be performed.
     let user_role = get_user_role(pool, user_id)
         .await
         .map_err(|_| AssignmentError::Database)?;
@@ -73,14 +66,14 @@ pub async fn delete_assignment(
     user_id: Uuid,
     class_id: Uuid,
     assignment_id: Uuid,
-) -> Result<(), AssignmentError> {
+) -> Result<bool, AssignmentError> {
     if !get_permissions(pool, user_id, class_id)
         .await?
         .contains(Permissions::DELETE_ASSIGNMENTS)
     {
         return Err(AssignmentError::Unauthorized);
     }
-    Ok(repository::delete_assingment(pool, assignment_id).await?)
+    Ok(repository::delete_assignment(pool, assignment_id).await?)
 }
 //Assign an assignment to a student.
 pub async fn assign_student(
@@ -113,8 +106,11 @@ pub async fn submit_assignment(
     class_id: Uuid,
     assignment_id: Uuid,
     student_id: Uuid,
-) -> Result<(), AssignmentError> {
+) -> Result<bool, AssignmentError> {
+    todo!()
 }
+//Assign an assignment to every student.
+pub async fn assign_to_class() {}
 
 // This does not perform any sort of check of whether the repository matches the template set by the
 // teacher. However this does get caught by the workflow/job executor.
@@ -132,43 +128,5 @@ pub async fn link_repsitory(
         .map_err(|_| AssignmentError::Database)
 }
 
-pub struct ClassFilter {}
 //Same idea as below but a diff scope.
 pub async fn assign_to_class() {}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Range<T> {
-    pub lower: T,
-    pub upper: T,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub enum Condition<T> {
-    Range(Range<T>),
-    EqualTo(T),
-    LessThan(T),
-    GreaterThan(T),
-}
-impl<T: PartialOrd> Condition<T> {
-    pub fn matches(&self, value: &T) -> bool
-    where
-        T: PartialEq,
-    {
-        match self {
-            Self::Range(range) => value >= &range.lower && value <= &range.upper,
-            Self::EqualTo(expected) => value == expected,
-            Self::LessThan(bound) => value < bound,
-            Self::GreaterThan(bound) => value > bound,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct StudentFilter {
-    pub grade: Option<Condition<i32>>,
-    pub name: Option<Condition<String>>,
-}
-
-//Add a filter option via queries to allow teacher to set students who should recieve the
-//assignment.
-pub async fn assign_to_student() {}

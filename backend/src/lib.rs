@@ -32,4 +32,6 @@ pub trait GitProvider {
     fn repository_metadata();
 }
 
+//Provided a CSV of this format, qw qw
+pub async fn import_from_csv() {}
 //Import froma specific file format to make it less of a hassle.

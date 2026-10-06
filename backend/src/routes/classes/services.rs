@@ -6,8 +6,8 @@ use crate::routes::{
     auth::{models::SystemRole, repository::get_user_role},
     classes::{
         ClassError,
-        models::{CreateClass, Permissions},
-        repository::{self, get_class_role, set_course_code},
+        models::{ClassMember, CreateClass, Permissions},
+        repository::{self, get_class_role, is_member, set_course_code},
     },
     external::organizations::organization_exists,
 };
@@ -59,4 +59,24 @@ pub async fn create_class(
     repository::create_class(pool, input).await?;
     Ok(())
     //Validate the input
+}
+pub async fn student_count(
+    pool: &PgPool,
+    class_id: Uuid,
+    user_id: Uuid,
+) -> Result<i64, ClassError> {
+    if get_user_role(pool, user_id).await.unwrap() != SystemRole::Admin {
+        return Err(ClassError::PermissionDenied);
+    }
+    repository::student_count(pool, class_id).await
+}
+pub async fn get_members(
+    pool: &PgPool,
+    class_id: Uuid,
+    user_id: Uuid,
+) -> Result<Vec<ClassMember>, ClassError> {
+    if !is_member(pool, class_id, user_id).await? {
+        return Err(ClassError::NotMember);
+    }
+    repository::get_members(pool, class_id).await
 }

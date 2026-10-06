@@ -1,6 +1,6 @@
 use backend::{
     AppState,
-    routes::{assignment, auth, classes},
+    routes::{auth, classes},
 };
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
@@ -67,7 +67,6 @@ async fn main() {
     let (router, mut openapi) = router()
         .routes(routes!(health))
         .merge(auth::router())
-        .merge(assignment::router())
         .merge(classes::router())
         .with_state(state)
         .split_for_parts();

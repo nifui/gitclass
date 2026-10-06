@@ -1,4 +1,3 @@
-pub mod assignment;
 pub mod auth;
 pub mod classes;
 pub mod external;

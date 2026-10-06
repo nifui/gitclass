@@ -1,4 +1,4 @@
-use sqlx::{Executor, PgPool, Postgres};
+use sqlx::{Executor, PgPool, Postgres, pool};
 use uuid::Uuid;
 
 use crate::routes::classes::{
@@ -40,8 +40,7 @@ where
 
     Ok(classes)
 }
-
-/// Gets the role that a user has in a class.
+//If the requested user is not part of the class, this error is propogated back up.
 pub async fn get_class_role(
     pool: &PgPool,
     user_id: Uuid,
@@ -212,4 +211,25 @@ pub async fn student_count(pool: &PgPool, class_id: Uuid) -> Result<i64, ClassEr
     .fetch_one(pool)
     .await?
     .unwrap_or_default())
+}
+
+pub async fn is_member(
+    pool: &PgPool,
+    class_id: Uuid,
+    student_id: Uuid,
+) -> Result<bool, ClassError> {
+    Ok(sqlx::query!(
+        r#"
+        SELECT COUNT(*) 
+        FROM class_members 
+        WHERE user_id = $1
+        AND class_id = $2"#,
+        student_id,
+        class_id
+    )
+    .fetch_one(pool)
+    .await?
+    .count
+    .unwrap_or_default()
+        > 0)
 }

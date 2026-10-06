@@ -1,4 +1,4 @@
-use crate::routes::assignment::{AssignmentError, models::*};
+use crate::routes::classes::assignment::{AssignmentError, models::*};
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
 

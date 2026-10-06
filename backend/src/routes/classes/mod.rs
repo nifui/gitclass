@@ -2,11 +2,12 @@ use axum::{http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod assignment;
 pub mod controller;
 pub mod models;
 pub mod repository;
 pub mod services;
-
+pub mod student;
 pub use controller::router;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Error)]

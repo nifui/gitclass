@@ -3,7 +3,8 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::routes::{
-    assignment::{
+    auth::{models::SystemRole, repository::get_user_role},
+    classes::assignment::{
         AssignmentError,
         models::{
             Assignment, AssignmentRepositoryLink, AssignmentStudent, AssignmentStudentStatus,
@@ -11,7 +12,6 @@ use crate::routes::{
         },
         repository::{self, get_assignment_id, get_assignment_students},
     },
-    auth::{models::SystemRole, repository::get_user_role},
     classes::{models::Permissions, services::get_permissions},
 };
 
@@ -92,19 +92,35 @@ pub async fn assign_student(
 }
 //Returns info on the assignments and students associated with them.
 pub async fn assignment_student_info(
-    pool: PgPool,
+    pool: &PgPool,
+    user_id: Uuid,
     class_id: Uuid,
     assignment_name: String,
 ) -> Result<Vec<AssignmentStudent>, AssignmentError> {
-    let assignment_id = get_assignment_id(&pool, &assignment_name, class_id).await?;
-    Ok(get_assignment_students(&pool, assignment_id).await?)
+    if !get_permissions(pool, user_id, class_id)
+        .await?
+        .contains(Permissions::MANAGE_CLASS)
+    {
+        return Err(AssignmentError::Unauthorized);
+    }
+
+    let assignment_id = get_assignment_id(pool, &assignment_name, class_id).await?;
+    Ok(get_assignment_students(pool, assignment_id).await?)
 }
 
 pub async fn submit_assignment(
     pool: &PgPool,
     assignment_id: Uuid,
     student_id: Uuid,
+    class_id: Uuid,
 ) -> Result<bool, AssignmentError> {
+    if !get_permissions(pool, student_id, class_id)
+        .await?
+        .contains(Permissions::SUBMIT_ASSIGNMENT)
+    {
+        return Err(AssignmentError::Unauthorized);
+    }
+
     repository::update_student_status(
         pool,
         assignment_id,

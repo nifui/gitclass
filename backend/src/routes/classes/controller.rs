@@ -16,7 +16,9 @@ use crate::{
 
 pub fn router() -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::default()
-        .route("/class/{class_id}/student", get(get_members))
+        .route("/class/{class_id}/students", get(get_members))
+        .merge(super::assignment::router())
+        .merge(super::student::router())
         .routes(routes!(get_member_info))
 }
 pub async fn get_members(
@@ -27,12 +29,6 @@ pub async fn get_members(
     Ok(Json(Vec::default()))
 }
 
-pub async fn get_assosciated_classes(
-    State(state): State<Arc<AppState>>,
-    AuthUser(claims): AuthUser,
-) -> Result<(), ClassError> {
-    Ok(())
-}
 #[utoipa::path(get, path = "/class/{class_id}/student/{student_id}", 
     responses(
         (status = 200, description = "Successfully returned member info"),

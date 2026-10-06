@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{self, prelude::FromRow};
 use time::OffsetDateTime;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
@@ -22,7 +23,7 @@ pub enum AssignmentStudentStatus {
     Exempt,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateAssignment {
     pub class_id: Uuid,
     pub title: String,
@@ -80,7 +81,7 @@ pub struct CreateAssignmentPayload {
     pub total_points: i32,
     pub created_by: Uuid,
 }
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, ToSchema)]
 pub struct AssignAssignmentRequest {
     pub student_id: Uuid,
     pub assignment_id: Uuid,

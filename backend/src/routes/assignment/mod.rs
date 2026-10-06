@@ -2,7 +2,7 @@ use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::errors::ApiError;
+use crate::{errors::ApiError, routes::classes::ClassError};
 pub mod controller;
 pub mod models;
 pub mod repository;
@@ -21,6 +21,8 @@ pub enum AssignmentError {
     Unauthorized,
     #[error("Resource was not found with the provided parameters")]
     NotFound,
+    #[error("Transparent")]
+    ClassError(#[from] ClassError),
 }
 
 impl From<sqlx::Error> for AssignmentError {

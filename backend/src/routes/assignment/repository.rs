@@ -218,12 +218,44 @@ where
     .ok_or(AssignmentError::DoesNotExist)?
     .id)
 }
+//This hides a lot of failure cases. Some of these can be handled by the service built on top of it
+//but the nature of this being a fused query obfuscates a lot of errors into one.
+//Certain students not being assigned the assignment as they already have it?
+//Invalid class_id?
+//Invalid assignment_id?
+//Will strengthen later.
+//Some of the concerns might not be actual problems.
 pub async fn assign_to_class<'e, E>(
     executor: E,
-    assignment_name: &str,
+    assignment_id: Uuid,
     class_id: Uuid,
-) -> Result<Uuid, AssignmentError>
+) -> Result<bool, AssignmentError>
 where
     E: Executor<'e, Database = Postgres>,
 {
+    let res = sqlx::query!(
+        r#"
+        INSERT INTO assignment_students (
+            assignment_id,
+            student_id
+        )
+        SELECT
+            a.id,
+            cs.user_id
+        FROM assignments AS a
+        INNER JOIN class_members AS cs
+            ON cs.class_id = a.class_id
+        WHERE a.id = $1
+          AND a.class_id = $2
+          AND cs.role = 'STUDENT' 
+        ON CONFLICT (assignment_id, student_id)
+        DO NOTHING
+        "#,
+        assignment_id,
+        class_id,
+    )
+    .execute(executor)
+    .await?;
+
+    Ok(res.rows_affected() > 0)
 }

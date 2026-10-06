@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -7,8 +6,8 @@ use crate::routes::{
     assignment::{
         AssignmentError,
         models::{
-            Assignment, AssignmentRepositoryLink, AssignmentStudent, CreateAssignment,
-            CreateAssignmentPayload,
+            Assignment, AssignmentRepositoryLink, AssignmentStudent, AssignmentStudentStatus,
+            CreateAssignment, CreateAssignmentPayload,
         },
         repository::{self, get_assignment_id, get_assignment_students},
     },
@@ -103,14 +102,33 @@ pub async fn assignment_student_info(
 
 pub async fn submit_assignment(
     pool: &PgPool,
-    class_id: Uuid,
     assignment_id: Uuid,
     student_id: Uuid,
 ) -> Result<bool, AssignmentError> {
-    todo!()
+    repository::update_student_status(
+        pool,
+        assignment_id,
+        student_id,
+        AssignmentStudentStatus::Submitted,
+    )
+    .await?;
+    Ok(true)
 }
 //Assign an assignment to every student.
-pub async fn assign_to_class() {}
+pub async fn assign_to_class(
+    pool: &PgPool,
+    user_id: Uuid,
+    assignment_id: Uuid,
+    class_id: Uuid,
+) -> Result<bool, AssignmentError> {
+    if !get_permissions(pool, user_id, class_id)
+        .await?
+        .contains(Permissions::ASSIGN_ASSIGNMENT)
+    {
+        return Err(AssignmentError::Unauthorized);
+    }
+    repository::assign_to_class(pool, assignment_id, class_id).await
+}
 
 // This does not perform any sort of check of whether the repository matches the template set by the
 // teacher. However this does get caught by the workflow/job executor.
@@ -127,6 +145,3 @@ pub async fn link_repsitory(
         .await
         .map_err(|_| AssignmentError::Database)
 }
-
-//Same idea as below but a diff scope.
-pub async fn assign_to_class() {}

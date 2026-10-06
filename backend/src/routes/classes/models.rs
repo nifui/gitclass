@@ -14,8 +14,8 @@ bitflags! {
         const EDIT_ASSIGNMENTS   = 1 << 2;
         const DELETE_ASSIGNMENTS = 1 << 3;
         const GRADE_ASSIGNMENTS  = 1 << 4;
-        const SUBMIT_ASSIGNMENT = 1 << 5;
-
+        const SUBMIT_ASSIGNMENT  = 1 << 5;
+        const ASSIGN_ASSIGNMENT  = 1 << 6;
         //Broadly admin capabilities.
         const MANAGE_CLASS       = 1 << 8;
     }
@@ -44,6 +44,7 @@ impl ClassRole {
                     | Permissions::DELETE_ASSIGNMENTS
                     | Permissions::GRADE_ASSIGNMENTS
                     | Permissions::MANAGE_CLASS
+                    | Permissions::ASSIGN_ASSIGNMENT
             }
 
             Self::Assistant => {

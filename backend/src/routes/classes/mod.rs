@@ -1,4 +1,5 @@
 use axum::{http::StatusCode, response::IntoResponse};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod controller;
@@ -8,12 +9,14 @@ pub mod services;
 
 pub use controller::router;
 
-#[derive(Debug, Error)]
+#[derive(Clone, Serialize, Deserialize, Debug, Error)]
 pub enum ClassError {
     #[error("placeholder")]
     Placeholder,
     #[error("Not enough permission")]
     PermissionDenied,
+    #[error("Not a member of class")]
+    NotMember,
 }
 
 impl From<sqlx::Error> for ClassError {

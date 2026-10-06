@@ -23,7 +23,7 @@ pub async fn get_permissions(
     pool: &PgPool,
     user_id: Uuid,
     class_id: Uuid,
-) -> Result<Permissions, sqlx::Error> {
+) -> Result<Permissions, ClassError> {
     let role = get_class_role(pool, user_id, class_id).await?;
     Ok(role.permissions())
 }

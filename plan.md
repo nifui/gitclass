@@ -83,3 +83,10 @@ On the controller level it should handle broad level authentication such as veri
 On the service level it handles more coarse domain specific authentication like TEACHER or STUDENT. 
 This helps prevent needlessly cluttering the controller. 
 Documentation is already a pain in the ass when looking at the code so less clutter = better. 
+
+## Rubric to  ensure proper design
+ 
+Return both the Uuid and actual front facing identifier(name or title). 
+Returning the Uuid allows querying resources without having the db make an additional call to find a resources ID. 
+There isn't really a security concern considering the identity of the user is enough. The auth system is robust enough.
+Opt for requests being made to take Uuids instead of names/titles. 

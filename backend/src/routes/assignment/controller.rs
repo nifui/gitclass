@@ -38,7 +38,7 @@ pub async fn delete_assignment(
     services::delete_assignment(&state.pool, claims.sub, class_id, assignment_id).await
 }
 
-pub async fn assign_assignment(
+pub async fn assign_to_student(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
     Json(req): Json<AssignAssignmentRequest>,
@@ -56,9 +56,17 @@ pub async fn assign_assignment(
 pub async fn submit_assignment(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
+    Json(assignment_id): Json<Uuid>,
+) -> Result<bool, AssignmentError> {
+    services::submit_assignment(&state.pool, assignment_id, claims.sub).await
+}
+
+pub async fn assign_to_class(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
     Json((class_id, assignment_id)): Json<(Uuid, Uuid)>,
 ) -> Result<bool, AssignmentError> {
-    services::submit_assignment(&state.pool, class_id, assignment_id, claims.sub).await
+    services::assign_to_class(&state.pool, claims.sub, assignment_id, class_id).await
 }
 
 pub fn router() -> OpenApiRouter<Arc<AppState>> {

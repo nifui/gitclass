@@ -6,7 +6,7 @@
 
 use std::marker::PhantomData;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use time::OffsetDateTime;
 
 use std::collections::HashMap;
@@ -63,7 +63,7 @@ pub struct Network {
     pub protocol: NetworkProtocol,
     //Might be the wrong type to represent a port?
     //Should hex or ints be used.
-    pub ports: Vec<u32>,
+    pub ports: Vec<u16>,
 }
 
 #[derive(Default, Deserialize, Debug)]
@@ -121,13 +121,47 @@ pub struct Cleanup {
 #[derive(Deserialize, Debug, Default)]
 pub struct Step {
     pub name: String,
-    #[serde(rename = "type")]
-    pub step_type: String,
+    #[serde(rename = "type", default)]
+    pub step_type: StepType,
     pub command: Option<Vec<String>>,
     pub timeout_seconds: Option<u64>,
+    // This doesn't self-reference workflows, as that'd be recursive.
     pub requires: Option<Vec<String>>,
+    pub external_requires: Option<Vec<ExternalRequireType>>,
+    pub environment: Option<Vec<String>>, // Added based on the TOML example
 }
-//Spawn a container with the specified configs.
+
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum StepType {
+    #[default]
+    Command,
+    Install,
+}
+
+#[derive(Debug)]
+pub enum ExternalRequireType {
+    Step(String),
+    Workflow(String),
+}
+
+impl<'de> Deserialize<'de> for ExternalRequireType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+
+        if let Some(rest) = s.strip_prefix("s:") {
+            Ok(ExternalRequireType::Step(rest.to_string()))
+        } else if let Some(rest) = s.strip_prefix("w:") {
+            Ok(ExternalRequireType::Workflow(rest.to_string()))
+        } else {
+            // Fallback or default handling if prefix is omitted
+            Ok(ExternalRequireType::Workflow(s))
+        }
+    }
+} //Spawn a container with the specified configs.
 //Specify lfietime of the package
 #[derive(Debug, Default, Clone)]
 pub struct ExecutableTask {}

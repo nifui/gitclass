@@ -1,25 +1,17 @@
-use std::collections::HashMap;
+use crate::utils::tasks::Task;
 
-#[derive(Debug, Default, Clone)]
-pub struct Task<'a> {
-    pub dependencies: &'a str,
-    pub name: &'a str,
-    ///Has the task been resolved? Meaning it's depedencies have been resolved?
-    pub resolved: bool,
-    pub command: String,
-    pub environment: Vec<(String, String)>,
-}
+pub enum TaskError {}
 
-#[derive(Debug, Default, Clone)]
-pub struct TaskDirectory<'a> {
-    pub task_map: HashMap<&'a str, Task<'a>>,
+pub fn resolve_task(task: &Task) -> Result<(), ()> {
+    //Validate the Task prior to execution.
+    //
+    Ok(())
 }
-//Must convert from the instructions to actual tasks to be executed.
-impl<'a> TaskDirectory<'a> {
-    fn new() -> Self {
-        Self::default()
-    }
-    fn add_task() -> Option<()> {
-        Some(())
-    }
+//This will only validate resources and not the steps.
+//If one of the steps does not execute properly this is handled by the executor.
+//Since we allow the users to specify a runtime, we should ask them to validate that the images
+//being installed are valid and can be used for the specified case.
+pub fn validate_task(task: &Task) -> Result<(), TaskError> {
+    Ok(())
 }
+pub fn execute_task() {}

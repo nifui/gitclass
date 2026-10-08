@@ -1,0 +1,75 @@
+# Example workflow showing every configurable option.
+# "auto" delegates a resource decision to the scheduler.
+
+[metadata]
+name = "Python Assignment 1"
+version = 1
+date = 1979-05-27T07:32:00Z
+
+[workflow]
+type = "workflow"
+requires = ["lint", "security-check"]
+
+[runtime]
+language = "python"
+version = "3.12"
+
+[runtime.dependencies]
+file = "requirements.lock"
+sha256 = "8c7c4d..."
+
+[network]
+enabled = false
+protocols = ["tcp", "udp"]
+ports = [8080, 8443]
+
+[filesystem]
+mode = "workspace"
+read_only = [
+    "/usr",
+    "/lib",
+    "/bin",
+]
+
+[limits]
+timeout_seconds = "auto"
+cpu_seconds = "auto"
+memory_mb = 512
+disk_mb = 1024
+processes = 32
+output_mb = 10
+
+[environment]
+variables = {
+    PYTHONUNBUFFERED = "1",
+    PYTHONDONTWRITEBYTECODE = "1",
+}
+
+[environment.secrets]
+API_KEY = "secret://api-key"
+DATABASE_URL = "secret://database-url"
+
+[artifacts]
+include = [
+    "pytest-report.xml",
+    "coverage.xml",
+]
+
+[cleanup]
+workspace = true
+processes = true
+
+[[steps]]
+name = "install"
+type = "install_dependencies"
+timeout_seconds = "auto"
+requires = []
+environment = []
+
+[[steps]]
+name = "test"
+type = "command"
+command = ["pytest", "tests/", "-v"]
+timeout_seconds = 30
+requires = ["install"]
+environment = ["PYTHONUNBUFFERED", "API_KEY"]

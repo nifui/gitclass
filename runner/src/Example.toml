@@ -22,7 +22,7 @@ sha256 = "8c7c4d..."
 # Can the network be used? 
 enabled = false
 # Allowed protocols 
-protocol = ["tdp"]
+protocol = ["tcp"]
 # Allowed ports
 ports = [8080]
 

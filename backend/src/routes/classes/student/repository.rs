@@ -14,16 +14,7 @@ where
 {
 }
 /// Returns info on the specific assignment belonging to a student within the class.
-pub async fn get_student_assignment<'e, E>(
-    executor: E,
-    stdudent_id: Uuid,
-) -> (
-    sqlx::query!(
-        r#"
-         
-        "#
-    )
-)
+pub async fn get_student_assignment<'e, E>(executor: E, stdudent_id: Uuid) -> ()
 where
     E: Executor<'e, Database = Postgres>,
 {

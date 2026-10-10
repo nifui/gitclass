@@ -44,12 +44,9 @@ impl<T> Setting<T> {
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct Task {
+pub struct Workflow {
     #[serde(default)]
     pub metadata: Metadata,
-
-    #[serde(default)]
-    pub workflow: Workflow,
 
     /// The runtime is required to execute the task, but the individual
     /// dependency settings are optional.
@@ -87,6 +84,19 @@ pub struct Metadata {
 
     #[serde(default = "default_metadata_date")]
     pub date: OffsetDateTime,
+
+    /// `workflow` means the document is a complete workflow.
+    /// `step` means the document represents one reusable execution step.
+    /// Validation should require exactly one entry in `steps` for this type.
+    #[serde(rename = "type", default)]
+    pub workflow_type: WorkflowType,
+
+    /// Other workflow documents that must successfully execute before
+    /// this document may execute.
+    ///
+    /// The referenced document declares its own type.
+    #[serde(default)]
+    pub requires: Vec<String>,
 }
 
 impl Default for Metadata {
@@ -95,6 +105,8 @@ impl Default for Metadata {
             name: String::new(),
             version: default_metadata_version(),
             date: default_metadata_date(),
+            workflow_type: WorkflowType::default(),
+            requires: Vec::default(),
         }
     }
 }
@@ -105,25 +117,6 @@ const fn default_metadata_version() -> u32 {
 
 const fn default_metadata_date() -> OffsetDateTime {
     OffsetDateTime::UNIX_EPOCH
-}
-
-/// Describes what this file represents.
-///
-/// `workflow` means the document is a complete workflow.
-///
-/// `step` means the document represents one reusable execution step.
-/// Validation should require exactly one entry in `steps` for this type.
-#[derive(Debug, Deserialize, Default)]
-pub struct Workflow {
-    #[serde(rename = "type", default)]
-    pub workflow_type: WorkflowType,
-
-    /// Other workflow documents that must successfully execute before
-    /// this document may execute.
-    ///
-    /// The referenced document declares its own type.
-    #[serde(default)]
-    pub requires: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]

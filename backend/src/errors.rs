@@ -201,6 +201,7 @@ pub enum AuthError {
 }
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
+        println!("{}", self);
         ApiError::from(self).into_response()
     }
 }

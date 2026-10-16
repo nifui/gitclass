@@ -33,12 +33,13 @@ pub async fn create_user<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
+    //Default set the display name to the username.
     let id = sqlx::query_scalar!(
         r#"
         INSERT INTO users
-            (email, username, password_hash)
+            (email, username, password_hash, display_name)
         VALUES
-            ($1, $2, $3)
+            ($1, $2, $3, $3)
         RETURNING id
         "#,
         email,

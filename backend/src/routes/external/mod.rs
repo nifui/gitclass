@@ -24,3 +24,12 @@ pub enum ExternalError {
     #[error("Failed to find the requested repository with the given paramters.")]
     InvalidRepository,
 }
+
+//Allow users to manually link or use OAuth
+//OAuth should be easier for most people.
+//The issue with manually linking is there is no concrete way to verify the account being linked
+//actually belongs to the user.
+pub enum ProviderAuthType {
+    OAuth2,
+    OAuth,
+}

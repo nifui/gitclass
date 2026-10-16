@@ -3,7 +3,6 @@ use std::sync::Arc;
 use axum::{
     Json,
     extract::{Path, State},
-    routing::get,
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
@@ -16,7 +15,6 @@ use crate::{
 
 pub fn router() -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::default()
-        .route("/class/{class_id}/students", get(get_members))
         .merge(super::assignment::router())
         .merge(super::student::router())
         .routes(routes!(get_member_info))

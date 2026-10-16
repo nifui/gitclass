@@ -11,7 +11,9 @@ use utoipa::{
     openapi::security::{Http, HttpAuthScheme, SecurityScheme},
 };
 use utoipa_axum::{router::OpenApiRouter, routes};
-use utoipa_redoc::{Redoc, Servable};
+
+#[cfg(feature = "docs")]
+use utoipa_scalar::Scalar;
 
 static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
 #[inline(always)]
@@ -82,13 +84,19 @@ async fn main() {
     openapi.info.version = String::from("1.0.0");
     openapi.info.license = None;
 
-    let app = router.merge(Redoc::with_url("/redoc", openapi));
+    // Conditionally merge Scalar UI only if the "docs" feature is active
+    let app = router;
+    #[cfg(feature = "docs")]
+    let app = app.merge(Scalar::new(openapi));
 
     let listener = TcpListener::bind(&serve_address)
         .await
         .expect("Failed to bind listener");
 
     println!("Backend being served at {}", serve_address);
+    if cfg!(feature = "docs") {
+        println!("Documentation available at http://{}/scalar", serve_address);
+    }
 
     axum::serve(listener, app).await.unwrap();
 }
@@ -101,7 +109,6 @@ async fn main() {
         (status = 200, description = "Service is healthy")
     )
 )]
-
 async fn health() -> &'static str {
     "OK"
 }

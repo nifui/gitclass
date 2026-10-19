@@ -88,9 +88,21 @@ pub struct ClassMember {
 }
 
 // Request to create a class.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateClass {
     pub name: String,
     pub term: Option<String>,
     pub organization_id: Option<Uuid>,
+}
+
+//Only takes the class code.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct JoinRequest {
+    pub code: String,
+    pub user: Uuid,
+}
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct LinkOrgRequest {
+    organization_id: Uuid,
+    class_id: Uuid,
 }

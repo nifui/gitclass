@@ -10,7 +10,11 @@ use uuid::Uuid;
 use crate::{
     AppState,
     middleware::auth::AuthUser,
-    routes::classes::{ClassError, models::ClassMember},
+    routes::classes::{
+        ClassError,
+        models::{ClassMember, CreateClass, JoinRequest},
+        services,
+    },
 };
 
 pub fn router() -> OpenApiRouter<Arc<AppState>> {
@@ -19,14 +23,12 @@ pub fn router() -> OpenApiRouter<Arc<AppState>> {
         .merge(super::student::router())
         .routes(routes!(get_member_info))
         .routes(routes!(get_members))
-        .routes(routes!(regenerate_class_code))
         .routes(routes!(leave_class))
         .routes(routes!(join_class))
         .routes(routes!(create_class))
-        .routes(routes!(set_class_code))
         .routes(routes!(link_organization))
+        .routes(routes!(generate_class_code))
 }
-use utoipa::path;
 
 #[utoipa::path(
     get,
@@ -73,26 +75,7 @@ pub async fn get_member_info(
 
 #[utoipa::path(
     post,
-    path = "/class/{class_id}/regenerate-code",
-    params(
-        ("class_id" = Uuid, Path, description = "ID of the class")
-    ),
-    responses(
-        (status = 200, description = "Successfully regenerated the class code", body = String),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Class not found")
-    ),
-    tag = "Classes"
-)]
-pub async fn regenerate_class_code(
-    State(state): State<Arc<AppState>>,
-) -> Result<String, ClassError> {
-    Ok("".to_string())
-}
-
-#[utoipa::path(
-    post,
-    path = "/class/leave",
+    path = "/class/{class_id}/leave",
     responses(
         (status = 200, description = "Successfully left the class"),
         (status = 401, description = "Unauthorized"),
@@ -100,24 +83,38 @@ pub async fn regenerate_class_code(
     ),
     tag = "Classes"
 )]
-pub async fn leave_class(State(state): State<Arc<AppState>>, AuthUser(claims): AuthUser) {}
+pub async fn leave_class(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+    Path(class_id): Path<Uuid>,
+) -> Result<(), ClassError> {
+    services::leave_class(&state.pool, claims.sub, class_id).await
+}
 
 #[utoipa::path(
     post,
     path = "/class/join",
     responses(
-        (status = 200, description = "Successfully joined the class"),
+        (status = 200, description = "Successfully joined the class", body = bool),
         (status = 400, description = "Invalid class code"),
         (status = 401, description = "Unauthorized"),
         (status = 404, description = "Class not found")
     ),
     tag = "Classes"
 )]
-pub async fn join_class() {}
+pub async fn join_class(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+    Json(req): Json<JoinRequest>,
+) -> Result<Json<bool>, ClassError> {
+    Ok(Json(
+        services::join_class(&state.pool, req.code, claims.sub).await?,
+    ))
+}
 
 #[utoipa::path(
     post,
-    path = "/class",
+    path = "/class/create",
     responses(
         (status = 201, description = "Successfully created the class"),
         (status = 400, description = "Invalid class data"),
@@ -125,7 +122,13 @@ pub async fn join_class() {}
     ),
     tag = "Classes"
 )]
-pub async fn create_class() {}
+pub async fn create_class(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+    Json(req): Json<CreateClass>,
+) -> Result<(), ClassError> {
+    Ok(())
+}
 
 #[utoipa::path(
     put,
@@ -141,7 +144,13 @@ pub async fn create_class() {}
     ),
     tag = "Classes"
 )]
-pub async fn set_class_code() {}
+pub async fn generate_class_code(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+    Path(class_id): Path<Uuid>,
+) -> Result<(), ClassError> {
+    services::generate_class_code(&state.pool, claims.sub, class_id).await
+}
 
 #[utoipa::path(
     post,
@@ -157,4 +166,9 @@ pub async fn set_class_code() {}
     ),
     tag = "Classes"
 )]
-pub async fn link_organization() {}
+pub async fn link_organization(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+) -> Result<(), ClassError> {
+    Ok(())
+}

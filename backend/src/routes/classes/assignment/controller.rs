@@ -10,10 +10,13 @@ use uuid::Uuid;
 use crate::{
     AppState,
     middleware::auth::AuthUser,
-    routes::classes::assignment::{
-        AssignmentError,
-        models::{AssignAssignmentRequest, Assignment, AssignmentStudent, CreateAssignment},
-        services,
+    routes::classes::{
+        ClassError,
+        assignment::{
+            AssignmentError,
+            models::{AssignAssignmentRequest, Assignment, AssignmentStudent, CreateAssignment},
+            services,
+        },
     },
 };
 
@@ -65,8 +68,12 @@ pub async fn create_assignment(
         ("bearer_auth" = [])
     )
 )]
-pub async fn list_assignments() {
-    // Implement listing and return Result<Json<Vec<Assignment>>, AssignmentError>.
+pub async fn list_assignments(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+    Path(class_id): Path<Uuid>,
+) -> Result<Json<Vec<Assignment>>, ClassError> {
+    Ok(Json(Vec::default()))
 }
 
 #[utoipa::path(

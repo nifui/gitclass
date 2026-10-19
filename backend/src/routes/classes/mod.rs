@@ -18,6 +18,10 @@ pub enum ClassError {
     PermissionDenied,
     #[error("Not a member of class")]
     NotMember,
+    #[error("Invalid class")]
+    InvalidClass,
+    #[error("Invalid fields for the request made")]
+    InvalidForm,
 }
 
 impl From<sqlx::Error> for ClassError {

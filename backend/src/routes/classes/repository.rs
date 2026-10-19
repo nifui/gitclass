@@ -258,3 +258,21 @@ where
     .await?;
     Ok(())
 }
+//This isn't concerned with whether the user can join the class.
+pub async fn find_corresponding_class<'e, E>(
+    executor: E,
+    class_code: String,
+) -> Result<Option<Uuid>, ClassError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    Ok(sqlx::query_scalar!(
+        r#"
+        SELECT id FROM classes
+        WHERE classes.course_code = $1
+        "#,
+        class_code
+    )
+    .fetch_optional(executor)
+    .await?)
+}

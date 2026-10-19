@@ -6,8 +6,10 @@ use crate::routes::{
     auth::{models::SystemRole, repository::get_user_role},
     classes::{
         ClassError,
-        models::{ClassMember, CreateClass, Permissions},
-        repository::{self, get_class_role, is_member, set_course_code},
+        models::{ClassMember, ClassRole, CreateClass, Permissions},
+        repository::{
+            self, add_member, find_corresponding_class, get_class_role, is_member, set_course_code,
+        },
     },
     external::organizations::organization_exists,
 };
@@ -79,4 +81,34 @@ pub async fn get_members(
         return Err(ClassError::NotMember);
     }
     repository::get_members(pool, class_id).await
+}
+
+pub async fn join_class(pool: &PgPool, code: String, user_id: Uuid) -> Result<bool, ClassError> {
+    let class_id = find_corresponding_class(pool, code).await?;
+
+    if class_id.is_none() {
+        return Err(ClassError::InvalidClass);
+    }
+
+    add_member(pool, class_id.unwrap(), user_id, ClassRole::Student).await?;
+
+    Ok(true)
+}
+
+pub async fn remove_member(pool: &PgPool, user_id: Uuid, class_id: Uuid) -> Result<(), ClassError> {
+    if !get_permissions(pool, user_id, class_id)
+        .await?
+        .contains(Permissions::MANAGE_CLASS)
+    {
+        return Err(ClassError::Placeholder);
+    }
+    repository::remove_member(pool, user_id, class_id).await?;
+    Ok(())
+}
+pub async fn leave_class(pool: &PgPool, user_id: Uuid, class_id: Uuid) -> Result<(), ClassError> {
+    if !is_member(pool, class_id, user_id).await? {
+        return Err(ClassError::NotMember);
+    }
+    repository::remove_member(pool, user_id, class_id).await?;
+    Ok(())
 }

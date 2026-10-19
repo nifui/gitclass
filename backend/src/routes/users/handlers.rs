@@ -12,6 +12,6 @@ pub async fn get_assosciated_classes(
 }
 
 pub async fn get_grades() {}
-pub async fn leave_class() {}
+pub async fn leave_class(State(state): State<Arc<AppState>>, AuthUser(claims): AuthUser) {}
 pub async fn join_class() {}
 pub async fn create_class() {}

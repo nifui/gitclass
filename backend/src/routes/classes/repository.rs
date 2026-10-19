@@ -1,4 +1,4 @@
-use sqlx::{Executor, PgPool, Postgres, pool};
+use sqlx::{Executor, PgPool, Postgres};
 use uuid::Uuid;
 
 use crate::routes::classes::{
@@ -213,11 +213,14 @@ pub async fn student_count(pool: &PgPool, class_id: Uuid) -> Result<i64, ClassEr
     .unwrap_or_default())
 }
 
-pub async fn is_member(
-    pool: &PgPool,
+pub async fn is_member<'e, E>(
+    executor: E,
     class_id: Uuid,
     student_id: Uuid,
-) -> Result<bool, ClassError> {
+) -> Result<bool, ClassError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
     Ok(sqlx::query!(
         r#"
         SELECT COUNT(*) 
@@ -227,9 +230,31 @@ pub async fn is_member(
         student_id,
         class_id
     )
-    .fetch_one(pool)
+    .fetch_one(executor)
     .await?
     .count
     .unwrap_or_default()
         > 0)
+}
+
+pub async fn remove_member<'e, E>(
+    executor: E,
+    user_id: Uuid,
+    class_id: Uuid,
+) -> Result<(), ClassError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(
+        r#"
+        DELETE FROM class_members 
+        WHERE user_id = $1
+        AND class_id = $2 
+        "#,
+        user_id,
+        class_id
+    )
+    .fetch_one(executor)
+    .await?;
+    Ok(())
 }

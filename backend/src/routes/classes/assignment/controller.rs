@@ -16,77 +16,211 @@ use crate::{
         services,
     },
 };
-#[utoipa::path(get, path = "/classes/{class_id}/assignments/create")]
+
+#[utoipa::path(
+    post,
+    path = "/classes/{class_id}/assignments",
+    params(
+        ("class_id" = Uuid, Path, description = "ID of the class")
+    ),
+    request_body = CreateAssignment,
+    responses(
+        (status = 201, description = "Assignment created successfully", body = Assignment),
+        (status = 400, description = "Invalid request or class parameters"),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Class not found"),
+        (status = 500, description = "Failed to create assignment")
+    ),
+    tag = "Assignments",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn create_assignment(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
     Json(req): Json<CreateAssignment>,
-) -> Json<Result<Assignment, AssignmentError>> {
-    Json(services::create_assignment(&state.pool, req, claims.sub).await)
+) -> Result<Json<Assignment>, AssignmentError> {
+    services::create_assignment(&state.pool, req, claims.sub)
+        .await
+        .map(Json)
 }
 
-#[utoipa::path(get, path = "/classes/{class_id}/assignments")]
-pub async fn list_assignments() {}
+#[utoipa::path(
+    get,
+    path = "/classes/{class_id}/assignments",
+    params(
+        ("class_id" = Uuid, Path, description = "ID of the class")
+    ),
+    responses(
+        (status = 200, description = "Assignments retrieved successfully", body = [Assignment]),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Class not found"),
+        (status = 500, description = "Database error")
+    ),
+    tag = "Assignments",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn list_assignments() {
+    // Implement listing and return Result<Json<Vec<Assignment>>, AssignmentError>.
+}
 
-//This should not rely on user id's to fetch a resource as it complicates the authentication model.
-#[utoipa::path(get, path = "/classes/{class_id}/assignments/{assignment_id}")]
+#[utoipa::path(
+    get,
+    path = "/classes/{class_id}/assignments/{assignment_id}",
+    params(
+        ("class_id" = Uuid, Path, description = "ID of the class"),
+        ("assignment_id" = Uuid, Path, description = "ID of the assignment")
+    ),
+    responses(
+        (status = 200, description = "Assignment retrieved successfully", body = Assignment),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Assignment or class not found"),
+        (status = 500, description = "Database error")
+    ),
+    tag = "Assignments",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_assignment(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
-    Json((class_id, assignment_id)): Json<(Uuid, Uuid)>,
-) -> Json<Result<Assignment, AssignmentError>> {
-    Json(services::get_assignment(&state.pool, claims.sub, class_id, assignment_id).await)
+    Path((class_id, assignment_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Assignment>, AssignmentError> {
+    services::get_assignment(&state.pool, claims.sub, class_id, assignment_id)
+        .await
+        .map(Json)
 }
 
-#[utoipa::path(delete, path = "/classes/{class_id}/assignments/{assignment_id}")]
+#[utoipa::path(
+    delete,
+    path = "/classes/{class_id}/assignments/{assignment_id}",
+    params(
+        ("class_id" = Uuid, Path, description = "ID of the class"),
+        ("assignment_id" = Uuid, Path, description = "ID of the assignment")
+    ),
+    responses(
+        (status = 204, description = "Assignment deleted successfully"),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Assignment or class not found"),
+        (status = 500, description = "Database error")
+    ),
+    tag = "Assignments",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn delete_assignment(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
     Path((class_id, assignment_id)): Path<(Uuid, Uuid)>,
-) -> Json<Result<bool, AssignmentError>> {
-    Json(services::delete_assignment(&state.pool, claims.sub, class_id, assignment_id).await)
+) -> Result<(), AssignmentError> {
+    services::delete_assignment(&state.pool, claims.sub, class_id, assignment_id)
+        .await
+        .map(|_| ())
 }
-#[utoipa::path(post, path = "/assign")]
+
+#[utoipa::path(
+    post,
+    path = "/classes/{class_id}/assignments/{assignment_id}/students",
+    params(
+        ("class_id" = Uuid, Path, description = "ID of the class"),
+        ("assignment_id" = Uuid, Path, description = "ID of the assignment")
+    ),
+    request_body = AssignAssignmentRequest,
+    responses(
+        (status = 201, description = "Student assigned successfully", body = AssignmentStudent),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Assignment, class, or student not found"),
+        (status = 500, description = "Database error")
+    ),
+    tag = "Assignments",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn assign_to_student(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
-    Json(req): Json<AssignAssignmentRequest>,
-) -> Json<Result<AssignmentStudent, AssignmentError>> {
-    Json(
-        services::assign_student(
-            &state.pool,
-            claims.sub,
-            req.class_id,
-            req.assignment_id,
-            req.student_id,
-        )
-        .await,
-    )
+    Path((class_id, assignment_id)): Path<(Uuid, Uuid)>,
+    Json(student_id): Json<Uuid>,
+) -> Result<Json<AssignmentStudent>, AssignmentError> {
+    services::assign_student(&state.pool, claims.sub, class_id, assignment_id, student_id)
+        .await
+        .map(Json)
 }
-#[utoipa::path(post, path = "/classes/{class_id}/assignments/{assignment_id}/submit")]
+
+#[utoipa::path(
+    post,
+    path = "/classes/{class_id}/assignments/{assignment_id}/submit",
+    params(
+        ("class_id" = Uuid, Path, description = "ID of the class"),
+        ("assignment_id" = Uuid, Path, description = "ID of the assignment")
+    ),
+    responses(
+        (status = 200, description = "Assignment submitted successfully"),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Assignment not found"),
+        (status = 500, description = "Database error")
+    ),
+    tag = "Assignments",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn submit_assignment(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
     Path((class_id, assignment_id)): Path<(Uuid, Uuid)>,
-) -> Json<Result<bool, AssignmentError>> {
-    Json(services::submit_assignment(&state.pool, assignment_id, claims.sub, class_id).await)
+) -> Result<Json<bool>, AssignmentError> {
+    services::submit_assignment(&state.pool, assignment_id, claims.sub, class_id)
+        .await
+        .map(Json)
 }
-#[utoipa::path(post, path = "/assign_class")]
+
+#[utoipa::path(
+    post,
+    path = "/classes/{class_id}/assignments/{assignment_id}/assign-class",
+    params(
+        ("class_id" = Uuid, Path, description = "ID of the class"),
+        ("assignment_id" = Uuid, Path, description = "ID of the assignment")
+    ),
+    responses(
+        (status = 200, description = "Assignment associated with the class successfully"),
+        (status = 401, description = "Authentication required"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Assignment or class not found"),
+        (status = 500, description = "Database error")
+    ),
+    tag = "Assignments",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn assign_to_class(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
-    Json((class_id, assignment_id)): Json<(Uuid, Uuid)>,
-) -> Json<Result<bool, AssignmentError>> {
-    Json(services::assign_to_class(&state.pool, claims.sub, assignment_id, class_id).await)
+    Path((class_id, assignment_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<bool>, AssignmentError> {
+    services::assign_to_class(&state.pool, claims.sub, assignment_id, class_id)
+        .await
+        .map(Json)
 }
-//This should queue some job if it requires some workflow to be executed.
-//By default on submission, it'll query if anytthing relevant to grading can be performed.
-//If yes queue the job to be executed, otherwise leave as is.
-//
 
 pub fn router() -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::default()
         .routes(routes!(create_assignment))
+        .routes(routes!(list_assignments))
         .routes(routes!(get_assignment))
         .routes(routes!(delete_assignment))
         .routes(routes!(assign_to_student))

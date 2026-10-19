@@ -7,7 +7,7 @@ use crate::{
         }, repository::get_active_admin_pin, services::{self, revoke_session_by_id, verify_password},
     },
 };
-use axum::{Json, extract::State};
+use axum::{Json, extract::{Path, State}};
 use utoipa_axum::{router::OpenApiRouter, routes};
 use uuid::Uuid;
 
@@ -93,8 +93,8 @@ pub async fn signout(
     revoke_session_by_id(state.pool.clone(), claims.sub, claims.sid).await
 }
 #[utoipa::path(
-    post,
-    path = "/auth/revoke",
+    delete,
+    path = "/auth/revoke/{uuid}",
     security(
         ("bearer_auth" = [])
     ),
@@ -107,7 +107,7 @@ pub async fn signout(
 async fn revoke_session(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
-    Json(uuid): Json<Uuid>,
+    Path(uuid): Path<Uuid>,
 ) -> Result<(), AuthError> {
     revoke_session_by_id(state.pool.clone(), claims.sub, uuid).await
 }
@@ -142,7 +142,7 @@ pub async fn admin_auth(State(state): State<Arc<AppState>>, AuthUser(claims): Au
 }
 
 #[utoipa::path(
-    post,
+    delete,
     path = "/auth/revoke_all",
     security(
         ("bearer_auth" = [])

@@ -13,7 +13,7 @@ use utoipa::{
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 #[cfg(feature = "docs")]
-use utoipa_scalar::Scalar;
+use utoipa_scalar::{Scalar, Servable};
 
 static JWT_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
 #[inline(always)]
@@ -67,7 +67,6 @@ async fn main() {
     });
 
     let (router, mut openapi) = router()
-        .routes(routes!(health))
         .merge(auth::router())
         .merge(classes::router())
         .with_state(state)
@@ -87,7 +86,7 @@ async fn main() {
     // Conditionally merge Scalar UI only if the "docs" feature is active
     let app = router;
     #[cfg(feature = "docs")]
-    let app = app.merge(Scalar::new(openapi));
+    let app = app.merge(Scalar::with_url("/scalar", openapi));
 
     let listener = TcpListener::bind(&serve_address)
         .await
@@ -99,16 +98,4 @@ async fn main() {
     }
 
     axum::serve(listener, app).await.unwrap();
-}
-
-#[utoipa::path(
-    get,
-    path = "/health",
-    tag = "users",
-    responses(
-        (status = 200, description = "Service is healthy")
-    )
-)]
-async fn health() -> &'static str {
-    "OK"
 }

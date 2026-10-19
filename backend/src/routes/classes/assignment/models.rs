@@ -4,7 +4,7 @@ use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema)]
 #[sqlx(type_name = "assignment_status", rename_all = "UPPERCASE")]
 pub enum AssignmentStatus {
     Draft,
@@ -13,7 +13,7 @@ pub enum AssignmentStatus {
     Archived,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema)]
 #[sqlx(type_name = "assignment_student_status", rename_all = "UPPERCASE")]
 pub enum AssignmentStudentStatus {
     Assigned,
@@ -32,7 +32,7 @@ pub struct CreateAssignment {
     pub due_at: OffsetDateTime,
     pub total_points: i32,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Assignment {
     pub id: Uuid,
     pub class_id: Uuid,
@@ -48,7 +48,7 @@ pub struct Assignment {
     pub updated_at: OffsetDateTime,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct AssignmentStudent {
     pub id: Uuid,
     pub assignment_id: Uuid,

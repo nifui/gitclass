@@ -93,7 +93,7 @@ where
             INSERT INTO assignment_students (assignment_id, student_id)
             VALUES ($1, $2)
             RETURNING 
-                id, assignment_id, student_id, 
+                id, assignment_id, 
                 status AS "status: AssignmentStudentStatus", 
                 assigned_at, started_at, submitted_at, graded_at, 
                 created_at, updated_at
@@ -123,15 +123,35 @@ where
         SET 
             status = $1::assignment_student_status,
             updated_at = $2,
-            started_at = COALESCE(started_at, CASE WHEN $1::text = 'STARTED' THEN $2::timestamptz ELSE NULL END),
-            submitted_at = COALESCE(submitted_at, CASE WHEN $1::text = 'SUBMITTED' THEN $2::timestamptz ELSE NULL END),
-            graded_at = COALESCE(graded_at, CASE WHEN $1::text = 'GRADED' THEN $2::timestamptz ELSE NULL END)
+            started_at = COALESCE(
+                started_at, 
+                CASE WHEN $1::text = 'STARTED' 
+                THEN $2::timestamptz 
+                ELSE NULL END
+            ),
+            submitted_at = COALESCE(
+                submitted_at, 
+                CASE WHEN $1::text = 'SUBMITTED' 
+                THEN $2::timestamptz 
+                ELSE NULL END
+            ),
+            graded_at = COALESCE(
+                graded_at, 
+                CASE WHEN $1::text = 'GRADED' 
+                THEN $2::timestamptz 
+                ELSE NULL END
+            )
         WHERE assignment_id = $3 AND student_id = $4
         RETURNING 
-            id, assignment_id, student_id, 
+            id, 
+            assignment_id, 
             status AS "status: AssignmentStudentStatus", 
-            assigned_at, started_at, submitted_at, graded_at, 
-            created_at, updated_at
+            assigned_at, 
+            started_at, 
+            submitted_at, 
+            graded_at, 
+            created_at, 
+            updated_at
         "#,
         new_status as AssignmentStudentStatus,
         now,
@@ -180,7 +200,7 @@ where
         AssignmentStudent,
         r#"
         SELECT 
-            id, assignment_id, student_id, 
+            id, assignment_id,
             status AS "status: AssignmentStudentStatus", 
             assigned_at, started_at, submitted_at, graded_at, 
             created_at, updated_at

@@ -52,7 +52,6 @@ pub struct Assignment {
 pub struct AssignmentStudent {
     pub id: Uuid,
     pub assignment_id: Uuid,
-    pub student_id: Uuid,
     pub status: AssignmentStudentStatus,
     pub assigned_at: OffsetDateTime,
     pub started_at: Option<OffsetDateTime>,

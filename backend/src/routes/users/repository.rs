@@ -1,9 +1,14 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{Executor, Postgres, prelude::FromRow};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::routes::{
-    classes::{ClassError, models::ClassStatus},
+    classes::{
+        ClassError,
+        assignment::models::{AssignmentStudent, AssignmentStudentStatus},
+        models::ClassStatus,
+    },
     users::models::ClassMeta,
 };
 
@@ -38,30 +43,105 @@ where
 {
     Ok(Vec::default())
 }
-pub async fn create_class<'e, E>(executor: E, user_id: Uuid) -> Result<(), ClassError>
+pub async fn create_class<'e, E>(
+    executor: E,
+    name: String,
+    term: String,
+) -> Result<Uuid, ClassError>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    Ok(())
+    Ok(sqlx::query!(
+        r#"
+        INSERT INTO classes
+        (name, status ,term)
+        VALUES ($1, 'OPEN' , $2)
+        RETURNING id
+        "#,
+        name,
+        term
+    )
+    .fetch_one(executor)
+    .await?
+    .id)
 }
 
-pub async fn get_user_assignments<'e, E>(executor: E, user_id: Uuid) -> Result<(), ClassError>
+pub async fn get_user_assignment<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+) -> Result<AssignmentStudent, ClassError>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    Ok(())
+    Ok(sqlx::query_as!(
+        AssignmentStudent,
+        r#"
+        SELECT 
+            id, 
+            assignment_id, 
+            status as "status: AssignmentStudentStatus", 
+            assigned_at, 
+            started_at, 
+            submitted_at, 
+            graded_at, 
+            created_at, 
+            updated_at
+        FROM assignment_students 
+        WHERE assignment_id = $1
+        "#,
+        assignment_id,
+    )
+    .fetch_one(executor)
+    .await?)
+}
+pub async fn get_user_assignments<'e, E>(
+    executor: E,
+    user_id: Uuid,
+) -> Result<Vec<AssignmentStudent>, ClassError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    Ok(sqlx::query_as!(
+        AssignmentStudent,
+        r#"
+        SELECT 
+            id, 
+            assignment_id, 
+            status as "status: AssignmentStudentStatus", 
+            assigned_at, 
+            started_at, 
+            submitted_at, 
+            graded_at, 
+            created_at, 
+            updated_at
+        FROM assignment_students 
+        WHERE student_id = $1
+        "#,
+        user_id
+    )
+    .fetch_all(executor)
+    .await?)
 }
 
-pub async fn get_user_assignment<'e, E>(executor: E, user_id: Uuid) -> Result<(), ClassError>
+pub async fn change_assignment_status<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+    status: AssignmentStudentStatus,
+) -> Result<bool, ClassError>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    Ok(())
-}
-
-pub async fn change_assignment_status<'e, E>(executor: E, user_id: Uuid) -> Result<(), ClassError>
-where
-    E: Executor<'e, Database = Postgres>,
-{
-    Ok(())
+    Ok(sqlx::query!(
+        r#"
+        UPDATE assignment_students
+        SET status = $1::assignment_student_status
+        WHERE student_id = $2
+        "#,
+        status as AssignmentStudentStatus,
+        assignment_id
+    )
+    .execute(executor)
+    .await?
+    .rows_affected()
+        > 0)
 }

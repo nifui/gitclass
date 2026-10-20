@@ -22,6 +22,10 @@ pub enum ClassError {
     InvalidClass,
     #[error("Invalid fields for the request made")]
     InvalidForm,
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Invalid assignment")]
+    InvalidAssignment,
 }
 
 impl From<sqlx::Error> for ClassError {

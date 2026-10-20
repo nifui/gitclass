@@ -50,21 +50,6 @@ pub async fn get_grades() {}
 
 #[utoipa::path(
     post,
-    path = "/classes/{class_id}/memberships",
-    params(
-        ("class_id" = Uuid, Path, description = "ID of the class to join")
-    ),
-    responses(
-        (status = 201, description = "Successfully joined the class"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Class not found")
-    ),
-    tag = "Users"
-)]
-pub async fn join_class() {}
-
-#[utoipa::path(
-    post,
     path = "/classes",
     responses(
         (status = 201, description = "Successfully created a class"),

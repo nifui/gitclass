@@ -161,3 +161,10 @@ pub async fn link_repsitory(
         .await
         .map_err(|_| AssignmentError::Database)
 }
+
+pub async fn is_owner(
+    pool: &PgPool,
+    assignment_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), AssignmentError> {
+}

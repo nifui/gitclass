@@ -1,6 +1,6 @@
 use backend::{
     AppState,
-    routes::{auth, classes},
+    routes::{auth, classes, users},
 };
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
@@ -32,8 +32,10 @@ pub fn jwt_secret() -> &'static [u8] {
         description = "Backend HTTP API"
     ),
     tags(
+        (name = "Authentication", description = "Auth related endpoints"),
         (name = "Users", description = "User endpoints"),
         (name = "Classes", description = "Class endpoints")
+        
     )
 )]
 struct ApiDoc;
@@ -69,6 +71,7 @@ async fn main() {
     let (router, mut openapi) = router()
         .merge(auth::router())
         .merge(classes::router())
+        .merge(users::router())
         .with_state(state)
         .split_for_parts();
 

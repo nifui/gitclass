@@ -14,24 +14,22 @@ where
         Assignment,
         r#"
         INSERT INTO assignments (
-            class_id, title, description, instructions, 
-            assigned_at, due_at, total_points, created_by
+            title, description, instructions,
+            total_points, created_by
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING 
-            id, class_id, title, description, instructions, 
-            assigned_at, due_at, total_points, 
+            id, title, description, instructions, 
+            total_points, 
             status AS "status: AssignmentStatus", 
             created_by, created_at, updated_at
+
         "#,
-        payload.class_id,
         payload.title,
         payload.description,
         payload.instructions,
-        payload.assigned_at,
-        payload.due_at,
         payload.total_points,
-        payload.created_by
+        payload.created_by,
     )
     .fetch_one(executor)
     .await
@@ -65,8 +63,8 @@ where
         Assignment,
         r#"
         SELECT 
-            id, class_id, title, description, instructions, 
-            assigned_at, due_at, total_points, 
+            id, title, description, instructions, 
+            total_points, 
             status AS "status: AssignmentStatus", 
             created_by, created_at, updated_at
         FROM assignments
@@ -90,10 +88,10 @@ where
     sqlx::query_as!(
         AssignmentStudent,
         r#"
-            INSERT INTO assignment_students (assignment_id, student_id)
+            INSERT INTO assignment_students (class_assignment_id, student_id)
             VALUES ($1, $2)
             RETURNING 
-                id, assignment_id, 
+                id, class_assignment_id, 
                 status AS "status: AssignmentStudentStatus", 
                 assigned_at, started_at, submitted_at, graded_at, 
                 created_at, updated_at
@@ -141,10 +139,10 @@ where
                 THEN $2::timestamptz 
                 ELSE NULL END
             )
-        WHERE assignment_id = $3 AND student_id = $4
+        WHERE class_assignment_id = $3 AND student_id = $4
         RETURNING 
             id, 
-            assignment_id, 
+            class_assignment_id, 
             status AS "status: AssignmentStudentStatus", 
             assigned_at, 
             started_at, 
@@ -174,11 +172,11 @@ where
     sqlx::query_as!(
         AssignmentRepositoryLink,
         r#"
-        INSERT INTO assignment_repositories (assignment_id, repository_id, student_id)
+        INSERT INTO assignment_repositories (class_assignment_id, repository_id, student_id)
         VALUES ($1, $2, $3)
-        ON CONFLICT (assignment_id, repository_id) 
+        ON CONFLICT (class_assignment_id, repository_id) 
         DO UPDATE SET student_id = EXCLUDED.student_id
-        RETURNING assignment_id, repository_id, student_id, created_at
+        RETURNING class_assignment_id, repository_id, student_id, created_at
         "#,
         assignment_id,
         repository_id,
@@ -200,12 +198,12 @@ where
         AssignmentStudent,
         r#"
         SELECT 
-            id, assignment_id,
+            id, class_assignment_id,
             status AS "status: AssignmentStudentStatus", 
             assigned_at, started_at, submitted_at, graded_at, 
             created_at, updated_at
         FROM assignment_students
-        WHERE assignment_id = $1
+        WHERE class_assignment_id = $1
         ORDER BY assigned_at DESC
         "#,
         assignment_id
@@ -218,7 +216,7 @@ where
 pub async fn get_assignment_id<'e, E>(
     executor: E,
     assignment_name: &str,
-    class_id: Uuid,
+    class_assignment_id: Uuid,
 ) -> Result<Uuid, AssignmentError>
 where
     E: Executor<'e, Database = Postgres>,
@@ -226,12 +224,10 @@ where
     Ok(sqlx::query!(
         r#"
         SELECT id
-        FROM assignments
-        WHERE class_id = $1
-        AND title = $2
+        FROM class_assignments
+        WHERE id = $1
         "#,
-        class_id,
-        assignment_name,
+        class_assignment_id,
     )
     .fetch_optional(executor)
     .await?
@@ -245,40 +241,76 @@ where
 //Invalid assignment_id?
 //Will strengthen later.
 //Some of the concerns might not be actual problems.
+
 pub async fn assign_to_class<'e, E>(
-    executor: E,
+    executor: &mut E,
     assignment_id: Uuid,
     class_id: Uuid,
 ) -> Result<bool, AssignmentError>
 where
-    E: Executor<'e, Database = Postgres>,
+    for<'c> &'c mut E: Executor<'c, Database = Postgres>,
 {
-    let res = sqlx::query!(
+    let class_assignment_id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO class_assignments (
+            class_id,
+            assignment_id
+        )
+        VALUES ($1, $2)
+        ON CONFLICT (class_id, assignment_id)
+        DO NOTHING
+        RETURNING id
+        "#,
+        class_id,
+        assignment_id,
+    )
+    .fetch_optional(&mut *executor)
+    .await?;
+
+    let (class_assignment_id, created) = match class_assignment_id {
+        Some(id) => (id, true),
+        None => {
+            let id = sqlx::query_scalar!(
+                r#"
+                SELECT id
+                FROM class_assignments
+                WHERE class_id = $1
+                  AND assignment_id = $2
+                "#,
+                class_id,
+                assignment_id,
+            )
+            .fetch_one(&mut *executor)
+            .await?;
+
+            (id, false)
+        }
+    };
+
+    sqlx::query!(
         r#"
         INSERT INTO assignment_students (
-            assignment_id,
+            class_assignment_id,
             student_id
         )
         SELECT
-            a.id,
-            cs.user_id
-        FROM assignments AS a
-        INNER JOIN class_members AS cs
-            ON cs.class_id = a.class_id
-        WHERE a.id = $1
-          AND a.class_id = $2
-          AND cs.role = 'STUDENT' 
-        ON CONFLICT (assignment_id, student_id)
+            $1,
+            cm.user_id
+        FROM class_members AS cm
+        WHERE cm.class_id = $2
+          AND cm.role = 'STUDENT'
+        ON CONFLICT (class_assignment_id, student_id)
         DO NOTHING
         "#,
-        assignment_id,
+        class_assignment_id,
         class_id,
     )
-    .execute(executor)
+    .execute(&mut *executor)
     .await?;
 
-    Ok(res.rows_affected() > 0)
+    Ok(created)
 }
+
 pub async fn change_assignment_status<'e, E>(
     executor: E,
     assignment_id: Uuid,

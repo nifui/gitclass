@@ -79,7 +79,7 @@ where
         r#"
         SELECT 
             id, 
-            assignment_id, 
+            class_assignment_id, 
             status as "status: AssignmentStudentStatus", 
             assigned_at, 
             started_at, 
@@ -88,7 +88,7 @@ where
             created_at, 
             updated_at
         FROM assignment_students 
-        WHERE assignment_id = $1
+        WHERE class_assignment_id = $1
         "#,
         assignment_id,
     )
@@ -107,7 +107,7 @@ where
         r#"
         SELECT 
             id, 
-            assignment_id, 
+            class_assignment_id, 
             status as "status: AssignmentStudentStatus", 
             assigned_at, 
             started_at, 

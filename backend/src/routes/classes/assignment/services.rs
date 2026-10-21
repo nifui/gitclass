@@ -148,7 +148,10 @@ pub async fn assign_to_class(
     {
         return Err(AssignmentError::Unauthorized);
     }
-    repository::assign_to_class(pool, assignment_id, class_id).await
+    let mut tx = pool.begin().await?;
+    let createdd = repository::assign_to_class(&mut *tx, assignment_id, class_id).await?;
+    tx.commit().await?;
+    Ok(createdd)
 }
 
 // This does not perform any sort of check of whether the repository matches the template set by the
@@ -178,10 +181,10 @@ pub async fn set_assignment_status(
     let class_id = sqlx::query!(
         r#"
         SELECT class_id 
-        FROM assignments as a 
+        FROM class_assignments as a 
         INNER JOIN assignment_students as st 
-        ON a.id = st.assignment_id 
-        WHERE st.assignment_id = $1 
+        ON a.id = st.class_assignment_id 
+        WHERE st.id = $1 
         "#,
         st_assignment_id
     )

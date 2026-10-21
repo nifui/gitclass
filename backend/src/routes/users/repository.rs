@@ -37,6 +37,7 @@ where
     .fetch_all(executor)
     .await?)
 }
+//Unsure of the scope. Maybe just general
 pub async fn get_grades<'e, E>(executor: E, user_id: Uuid) -> Result<Vec<i64>, ClassError>
 where
     E: Executor<'e, Database = Postgres>,
@@ -121,27 +122,4 @@ where
     )
     .fetch_all(executor)
     .await?)
-}
-
-pub async fn change_assignment_status<'e, E>(
-    executor: E,
-    assignment_id: Uuid,
-    status: AssignmentStudentStatus,
-) -> Result<bool, ClassError>
-where
-    E: Executor<'e, Database = Postgres>,
-{
-    Ok(sqlx::query!(
-        r#"
-        UPDATE assignment_students
-        SET status = $1::assignment_student_status
-        WHERE student_id = $2
-        "#,
-        status as AssignmentStudentStatus,
-        assignment_id
-    )
-    .execute(executor)
-    .await?
-    .rows_affected()
-        > 0)
 }

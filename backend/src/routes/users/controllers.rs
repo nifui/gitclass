@@ -1,8 +1,19 @@
-use axum::extract::State;
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use std::sync::Arc;
 use utoipa_axum::{router::OpenApiRouter, routes};
+use uuid::Uuid;
 
-use crate::{AppState, middleware::auth::AuthUser, routes::classes::ClassError};
+use crate::{
+    AppState,
+    middleware::auth::AuthUser,
+    routes::{
+        classes::{ClassError, assignment::models::AssignmentStudent},
+        users::{models::ClassMeta, services},
+    },
+};
 pub fn router() -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::default()
         .routes(routes!(get_assosciated_classes))
@@ -29,8 +40,10 @@ pub fn router() -> OpenApiRouter<Arc<AppState>> {
 pub async fn get_assosciated_classes(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
-) -> Result<(), ClassError> {
-    Ok(())
+) -> Result<Json<Vec<ClassMeta>>, ClassError> {
+    Ok(Json(
+        services::get_user_classes(&state.pool, claims.sub).await?,
+    ))
 }
 
 #[utoipa::path(
@@ -69,7 +82,14 @@ pub async fn create_class() {}
     ),
     tag = "Users"
 )]
-pub async fn get_assignments() {}
+pub async fn get_assignments(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+) -> Result<Json<Vec<AssignmentStudent>>, ClassError> {
+    Ok(Json(
+        services::get_user_assignments(&state.pool, claims.sub).await?,
+    ))
+}
 
 #[utoipa::path(
     get,
@@ -83,7 +103,14 @@ pub async fn get_assignments() {}
     ),
     tag = "Users"
 )]
-pub async fn get_assignment() {}
+pub async fn get_assignment(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+) -> Result<Json<AssignmentStudent>, ClassError> {
+    Ok(Json(
+        services::get_user_assignment(&state.pool, claims.sub).await?,
+    ))
+}
 
 #[utoipa::path(
     patch,
@@ -99,7 +126,16 @@ pub async fn get_assignment() {}
     ),
     tag = "Users"
 )]
-pub async fn submit_assignment() {}
+//Change this to check if the user owns the assignment first.
+pub async fn submit_assignment(
+    State(state): State<Arc<AppState>>,
+    AuthUser(claims): AuthUser,
+    Path(assignment_id): Path<Uuid>,
+) -> Result<Json<bool>, ClassError> {
+    Ok(Json(
+        services::submit_assignment(&state.pool, assignment_id).await?,
+    ))
+}
 
 #[utoipa::path(
     patch,

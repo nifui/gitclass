@@ -4,15 +4,20 @@ use uuid::Uuid;
 
 use crate::routes::{
     auth::{models::SystemRole, repository::get_user_role},
-    classes::assignment::{
-        AssignmentError,
-        models::{
-            Assignment, AssignmentRepositoryLink, AssignmentStudent, AssignmentStudentStatus,
-            CreateAssignment, CreateAssignmentPayload,
+    classes::{
+        assignment::{
+            AssignmentError,
+            models::{
+                Assignment, AssignmentRepositoryLink, AssignmentStudent, AssignmentStudentStatus,
+                CreateAssignment, CreateAssignmentPayload,
+            },
+            repository::{
+                self, change_assignment_status, get_assignment_id, get_assignment_students,
+            },
         },
-        repository::{self, get_assignment_id, get_assignment_students},
+        models::Permissions,
+        services::get_permissions,
     },
-    classes::{models::Permissions, services::get_permissions},
 };
 
 pub async fn create_assignment(
@@ -161,10 +166,35 @@ pub async fn link_repsitory(
         .await
         .map_err(|_| AssignmentError::Database)
 }
-
-pub async fn is_owner(
+//General purpsose, requires a higher set of permissions than the above two.
+//This is really suboptmal as it requires 3 queries to actually work.
+//Suppose it's worth it as failure cases are more clear as to where it occured.
+pub async fn set_assignment_status(
     pool: &PgPool,
-    assignment_id: Uuid,
     user_id: Uuid,
-) -> Result<(), AssignmentError> {
+    st_assignment_id: Uuid,
+    status: AssignmentStudentStatus,
+) -> Result<bool, AssignmentError> {
+    let class_id = sqlx::query!(
+        r#"
+        SELECT class_id 
+        FROM assignments as a 
+        INNER JOIN assignment_students as st 
+        ON a.id = st.assignment_id 
+        WHERE st.assignment_id = $1 
+        "#,
+        st_assignment_id
+    )
+    .fetch_optional(pool)
+    .await?
+    .ok_or(AssignmentError::NotFound)?
+    .class_id;
+    if !get_permissions(pool, user_id, class_id)
+        .await?
+        .contains(Permissions::MANAGE_CLASS)
+    {
+        return Err(AssignmentError::Unauthorized);
+    }
+    change_assignment_status(pool, st_assignment_id, status).await
 }
+pub async fn update_assignment() {}

@@ -279,3 +279,52 @@ where
 
     Ok(res.rows_affected() > 0)
 }
+pub async fn change_assignment_status<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+    status: AssignmentStudentStatus,
+) -> Result<bool, AssignmentError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    Ok(sqlx::query!(
+        r#"
+        UPDATE assignment_students
+        SET status = $1::assignment_student_status
+        WHERE student_id = $2
+        "#,
+        status as AssignmentStudentStatus,
+        assignment_id
+    )
+    .execute(executor)
+    .await?
+    .rows_affected()
+        > 0)
+}
+//Teachers and the owner of the assignment can modify it.
+pub async fn can_modify_assignment<'e, E>(
+    executor: E,
+    user_id: Uuid,
+    assignment_st_id: Uuid,
+) -> Result<bool, AssignmentError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let is_owner = sqlx::query!(
+        r#"
+        SELECT 
+        CASE 
+        WHEN student_id = $1 AND id = $2 THEN 1
+        ELSE 0
+        END AS is_owner
+        FROM assignment_students
+        "#,
+        user_id,
+        assignment_st_id
+    )
+    .fetch_one(executor)
+    .await?
+    .is_owner;
+
+    Ok(false)
+}

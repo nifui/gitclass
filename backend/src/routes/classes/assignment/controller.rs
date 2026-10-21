@@ -224,6 +224,10 @@ pub async fn assign_to_class(
         .map(Json)
 }
 
+pub async fn update_assignment() {
+    //Requires modifying other tables depending on what was changed in the assignment.
+    //
+}
 pub fn router() -> OpenApiRouter<Arc<AppState>> {
     OpenApiRouter::default()
         .routes(routes!(create_assignment))

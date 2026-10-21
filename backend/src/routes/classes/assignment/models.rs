@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{self, prelude::FromRow};
 use time::OffsetDateTime;
-use utoipa::ToSchema;
+use utoipa::{ToResponse, ToSchema};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema)]

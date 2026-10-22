@@ -83,3 +83,15 @@ pub struct AssignAssignmentRequest {
     pub assignment_id: Uuid,
     pub class_id: Uuid,
 }
+
+#[derive(FromRow, Serialize, Deserialize, ToSchema)]
+pub struct ClassAssignment {
+    pub id: Uuid,
+    pub class_id: Uuid,
+    pub assignment_id: Uuid,
+    pub assigned_at: Option<OffsetDateTime>,
+    pub due_at: Option<OffsetDateTime>,
+    pub status: AssignmentStatus,
+    pub created_at: OffsetDateTime,
+    pub updated_at: OffsetDateTime,
+}

@@ -6,3 +6,8 @@ Benchmarking
 -- (Use transactions for certain SQL scripts due to them affecting DB)
 -- Use oha or wrk to measure backend request stats. 
 -- Automated testing via the openapi spec that is auto generated when the backend is being served.
+
+Fixing scoped sql queries. 
+Change the assignments from regular assignment to class assignments.
+Class assignments to student assignments.
+

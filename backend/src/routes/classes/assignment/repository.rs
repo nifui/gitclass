@@ -1,8 +1,30 @@
 use crate::routes::classes::assignment::{AssignmentError, models::*};
 use sqlx::{Executor, Postgres};
+use time::OffsetDateTime;
 use uuid::Uuid;
 
-/// Create a new assignment
+// Scoped to the top level assignment base.
+pub async fn get_assignment_id<'e, E>(
+    executor: E,
+    assignment_name: &str,
+) -> Result<Uuid, AssignmentError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    Ok(sqlx::query!(
+        r#"
+        SELECT id
+        FROM assignments 
+        WHERE title = $1
+        "#,
+        assignment_name,
+    )
+    .fetch_optional(executor)
+    .await?
+    .ok_or(AssignmentError::DoesNotExist)?
+    .id)
+}
+
 pub async fn create_assignment<'e, E>(
     executor: E,
     payload: CreateAssignmentPayload,
@@ -75,9 +97,38 @@ where
     .fetch_optional(executor)
     .await
 }
+/// Link a repository to an assignment (and optionally to a student)
+pub async fn set_repository<'e, E>(
+    executor: E,
+    assignment_id: Uuid,
+    repository_id: Option<Uuid>,
+    student_id: Option<Uuid>,
+) -> Result<AssignmentRepositoryLink, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query_as!(
+        AssignmentRepositoryLink,
+        r#"
+        INSERT INTO assignment_repositories (class_assignment_id, repository_id, student_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (class_assignment_id, repository_id) 
+        DO UPDATE SET student_id = EXCLUDED.student_id
+        RETURNING class_assignment_id, repository_id, student_id, created_at
+        "#,
+        assignment_id,
+        repository_id,
+        student_id
+    )
+    .fetch_one(executor)
+    .await
+}
 
-/// Assign a student to an assignment
-pub async fn assign_student<'e, E>(
+// Assignment queries related to the scope of an individual student.
+// *
+// *
+// *
+pub async fn assign_to_student<'e, E>(
     executor: E,
     assignment_id: Uuid,
     student_id: Uuid,
@@ -104,7 +155,7 @@ where
 }
 
 /// Update a student's assignment status (e.g. from ASSIGNED to SUBMITTED)
-pub async fn update_student_status<'e, E>(
+pub async fn change_st_assignment_status<'e, E>(
     executor: E,
     assignment_id: Uuid,
     student_id: Uuid,
@@ -113,7 +164,6 @@ pub async fn update_student_status<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    let now = time::OffsetDateTime::now_utc();
     sqlx::query_as!(
         AssignmentStudent,
         r#"
@@ -152,95 +202,111 @@ where
             updated_at
         "#,
         new_status as AssignmentStudentStatus,
-        now,
+        OffsetDateTime::now_utc(),
         assignment_id,
-        student_id
-    )
-    .fetch_one(executor)
-    .await
-}
-/// Link a repository to an assignment (and optionally to a student)
-pub async fn link_repository<'e, E>(
-    executor: E,
-    assignment_id: Uuid,
-    repository_id: Uuid,
-    student_id: Option<Uuid>,
-) -> Result<AssignmentRepositoryLink, sqlx::Error>
-where
-    E: Executor<'e, Database = Postgres>,
-{
-    sqlx::query_as!(
-        AssignmentRepositoryLink,
-        r#"
-        INSERT INTO assignment_repositories (class_assignment_id, repository_id, student_id)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (class_assignment_id, repository_id) 
-        DO UPDATE SET student_id = EXCLUDED.student_id
-        RETURNING class_assignment_id, repository_id, student_id, created_at
-        "#,
-        assignment_id,
-        repository_id,
         student_id
     )
     .fetch_one(executor)
     .await
 }
 
-/// Fetch all students and their statuses for a specific assignment
-pub async fn get_assignment_students<'e, E>(
+// Assignment queries related to the scope of a whole class.
+// *
+// *
+// *
+pub async fn list_class_assignments<'e, E>(
     executor: E,
-    assignment_id: Uuid,
-) -> Result<Vec<AssignmentStudent>, sqlx::Error>
+    class_id: Uuid,
+) -> Result<Vec<ClassAssignment>, AssignmentError>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    sqlx::query_as!(
-        AssignmentStudent,
+    Ok(sqlx::query_as!(
+        ClassAssignment,
         r#"
         SELECT 
-            id, class_assignment_id,
-            status AS "status: AssignmentStudentStatus", 
-            assigned_at, started_at, submitted_at, graded_at, 
-            created_at, updated_at
-        FROM assignment_students
-        WHERE class_assignment_id = $1
-        ORDER BY assigned_at DESC
+            id, 
+            class_id, 
+            assignment_id, 
+            assigned_at, 
+            due_at, 
+            status as "status: AssignmentStatus", 
+            created_at, 
+            updated_at
+        FROM class_assignments
+        WHERE class_id = $1
         "#,
-        assignment_id
+        class_id
     )
     .fetch_all(executor)
-    .await
+    .await?)
 }
 
-//No duplicate assignments can exist in a class so we query with class_id to act as a unique id.
-pub async fn get_assignment_id<'e, E>(
+pub async fn set_class_assignment_status<'e, E>(
     executor: E,
-    assignment_name: &str,
-    class_assignment_id: Uuid,
-) -> Result<Uuid, AssignmentError>
+    cl_assignment_id: Uuid,
+    status: AssignmentStatus,
+) -> Result<ClassAssignment, AssignmentError>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    Ok(sqlx::query!(
+    Ok(sqlx::query_as!(
+        ClassAssignment,
         r#"
-        SELECT id
-        FROM class_assignments
-        WHERE id = $1
+        UPDATE class_assignments
+        SET 
+            status = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING 
+            id, 
+            class_id, 
+            assignment_id, 
+            assigned_at, 
+            due_at, 
+            status as "status: AssignmentStatus", 
+            created_at, 
+            updated_at
         "#,
-        class_assignment_id,
+        status as AssignmentStatus,
+        cl_assignment_id
     )
-    .fetch_optional(executor)
-    .await?
-    .ok_or(AssignmentError::DoesNotExist)?
-    .id)
+    .fetch_one(executor)
+    .await?)
 }
-//This hides a lot of failure cases. Some of these can be handled by the service built on top of it
-//but the nature of this being a fused query obfuscates a lot of errors into one.
-//Certain students not being assigned the assignment as they already have it?
-//Invalid class_id?
-//Invalid assignment_id?
-//Will strengthen later.
-//Some of the concerns might not be actual problems.
+
+pub async fn modify_class_assignment<'e, E>(
+    executor: E,
+    cl_assignment_id: Uuid,
+    due_at: Option<OffsetDateTime>,
+) -> Result<ClassAssignment, AssignmentError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    Ok(sqlx::query_as!(
+        ClassAssignment,
+        r#"
+        UPDATE class_assignments
+        SET 
+            due_at = COALESCE($1, due_at),
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING 
+            id, 
+            class_id, 
+            assignment_id, 
+            assigned_at, 
+            due_at, 
+            status as "status: AssignmentStatus", 
+            created_at, 
+            updated_at
+        "#,
+        due_at,
+        cl_assignment_id
+    )
+    .fetch_one(executor)
+    .await?)
+}
 
 pub async fn assign_to_class<'e, E>(
     executor: &mut E,
@@ -310,53 +376,28 @@ where
 
     Ok(created)
 }
-
-pub async fn change_assignment_status<'e, E>(
+//Gets all student assignments for a given cl_assignment_id
+pub async fn get_student_assignments<'e, E>(
     executor: E,
-    assignment_id: Uuid,
-    status: AssignmentStudentStatus,
-) -> Result<bool, AssignmentError>
+    cl_assignment_id: Uuid,
+) -> Result<Vec<AssignmentStudent>, sqlx::Error>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    Ok(sqlx::query!(
-        r#"
-        UPDATE assignment_students
-        SET status = $1::assignment_student_status
-        WHERE student_id = $2
-        "#,
-        status as AssignmentStudentStatus,
-        assignment_id
-    )
-    .execute(executor)
-    .await?
-    .rows_affected()
-        > 0)
-}
-//Teachers and the owner of the assignment can modify it.
-pub async fn can_modify_assignment<'e, E>(
-    executor: E,
-    user_id: Uuid,
-    assignment_st_id: Uuid,
-) -> Result<bool, AssignmentError>
-where
-    E: Executor<'e, Database = Postgres>,
-{
-    let is_owner = sqlx::query!(
+    sqlx::query_as!(
+        AssignmentStudent,
         r#"
         SELECT 
-        CASE 
-        WHEN student_id = $1 AND id = $2 THEN 1
-        ELSE 0
-        END AS is_owner
+            id, class_assignment_id,
+            status AS "status: AssignmentStudentStatus", 
+            assigned_at, started_at, submitted_at, graded_at, 
+            created_at, updated_at
         FROM assignment_students
+        WHERE class_assignment_id = $1
+        ORDER BY assigned_at DESC
         "#,
-        user_id,
-        assignment_st_id
+        cl_assignment_id
     )
-    .fetch_one(executor)
-    .await?
-    .is_owner;
-
-    Ok(false)
+    .fetch_all(executor)
+    .await
 }

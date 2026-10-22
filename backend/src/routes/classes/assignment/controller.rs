@@ -20,6 +20,42 @@ use crate::{
     },
 };
 
+pub fn router() -> OpenApiRouter<Arc<AppState>> {
+    OpenApiRouter::default()
+        .routes(routes!(create_assignment))
+        .routes(routes!(list_assignments))
+        .routes(routes!(get_assignment))
+        .routes(routes!(delete_assignment))
+        .routes(routes!(assign_to_student))
+        .routes(routes!(submit_assignment))
+        .routes(routes!(assign_to_class))
+}
+
+//Top level routes for assignment-relation (move to different routes).
+//
+// Create assignment
+// Link template to assignment
+// Remove template to assignment
+// Assign assignment to class.
+// Unassign assignment to class.
+// Modify class assignment
+// Delete assignment
+// Get class_assignment (assignment + class_assignment as it contains the metadata)
+// Get specific student assignment
+// Unassign student assignment
+// List class assignments
+// List student assignments
+// Change assignment status.
+//
+// Repositories
+// Set assignment template
+// Set assignment status
+// Assign assignment to class
+// Modify class assignment
+// Delete assignment
+// Get class assignment
+// Get student assignments
+//
 #[utoipa::path(
     post,
     path = "/classes/{class_id}/assignments",
@@ -68,6 +104,7 @@ pub async fn create_assignment(
         ("bearer_auth" = [])
     )
 )]
+
 pub async fn list_assignments(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
@@ -227,14 +264,4 @@ pub async fn assign_to_class(
 pub async fn update_assignment() {
     //Requires modifying other tables depending on what was changed in the assignment.
     //
-}
-pub fn router() -> OpenApiRouter<Arc<AppState>> {
-    OpenApiRouter::default()
-        .routes(routes!(create_assignment))
-        .routes(routes!(list_assignments))
-        .routes(routes!(get_assignment))
-        .routes(routes!(delete_assignment))
-        .routes(routes!(assign_to_student))
-        .routes(routes!(submit_assignment))
-        .routes(routes!(assign_to_class))
 }

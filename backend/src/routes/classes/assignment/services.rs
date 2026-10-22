@@ -12,7 +12,7 @@ use crate::routes::{
                 CreateAssignment, CreateAssignmentPayload,
             },
             repository::{
-                self, change_assignment_status, get_assignment_id, get_assignment_students,
+                self, change_st_assignment_status, get_assignment_id, get_student_assignments,
             },
         },
         models::Permissions,
@@ -93,7 +93,7 @@ pub async fn assign_student(
     {
         return Err(AssignmentError::Unauthorized);
     }
-    Ok(repository::assign_student(pool, assignment_id, student_id).await?)
+    Ok(repository::assign_to_student(pool, assignment_id, student_id).await?)
 }
 //Returns info on the assignments and students associated with them.
 pub async fn assignment_student_info(
@@ -109,8 +109,8 @@ pub async fn assignment_student_info(
         return Err(AssignmentError::Unauthorized);
     }
 
-    let assignment_id = get_assignment_id(pool, &assignment_name, class_id).await?;
-    Ok(get_assignment_students(pool, assignment_id).await?)
+    let assignment_id = get_assignment_id(pool, &assignment_name).await?;
+    Ok(get_student_assignments(pool, assignment_id).await?)
 }
 
 pub async fn submit_assignment(
@@ -126,7 +126,7 @@ pub async fn submit_assignment(
         return Err(AssignmentError::Unauthorized);
     }
 
-    repository::update_student_status(
+    repository::change_st_assignment_status(
         pool,
         assignment_id,
         student_id,
@@ -159,25 +159,25 @@ pub async fn assign_to_class(
 // THIS IS NOT A GENERAL TEMPLATE ASSIGNER FOR THE TEACHER.
 // THIS ONLY ASSOCIATES A REPOSITORY WITH A STUDENTS ASSIGNMENT FOR SUBMISSION OF.
 // Refer to the template creation logic.
-pub async fn link_repsitory(
+pub async fn set_repository(
     pool: PgPool,
-    repository_id: Uuid,
     assignment_id: Uuid,
+    repository_id: Option<Uuid>,
     student_id: Option<Uuid>,
 ) -> Result<AssignmentRepositoryLink, AssignmentError> {
-    repository::link_repository(&pool, assignment_id, repository_id, student_id)
+    repository::set_repository(&pool, assignment_id, repository_id, student_id)
         .await
         .map_err(|_| AssignmentError::Database)
 }
 //General purpsose, requires a higher set of permissions than the above two.
 //This is really suboptmal as it requires 3 queries to actually work.
 //Suppose it's worth it as failure cases are more clear as to where it occured.
-pub async fn set_assignment_status(
+pub async fn set_st_assignment_status(
     pool: &PgPool,
     user_id: Uuid,
     st_assignment_id: Uuid,
     status: AssignmentStudentStatus,
-) -> Result<bool, AssignmentError> {
+) -> Result<AssignmentStudent, AssignmentError> {
     let class_id = sqlx::query!(
         r#"
         SELECT class_id 
@@ -198,6 +198,13 @@ pub async fn set_assignment_status(
     {
         return Err(AssignmentError::Unauthorized);
     }
-    change_assignment_status(pool, st_assignment_id, status).await
+    Ok(change_st_assignment_status(pool, st_assignment_id, user_id, status).await?)
 }
 pub async fn update_assignment() {}
+pub async fn delete_asignment(
+    pool: &PgPool,
+    assigment_id: Uuid,
+    user_id: Uuid,
+) -> Result<(), AssignmentError> {
+    Ok(())
+}

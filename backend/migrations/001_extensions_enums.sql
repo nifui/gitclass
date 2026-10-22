@@ -25,7 +25,7 @@ CREATE TYPE assignment_student_status AS ENUM (
     'SUBMITTED',
     'GRADED',
     'EXEMPT'
-);
+t;
 
 CREATE TYPE grading_type AS ENUM (
     'AUTOMATIC',
